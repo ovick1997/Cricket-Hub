@@ -44,10 +44,10 @@ const OrgSetup = () => {
       return;
     }
 
-    // Link profile to org
+    // Link profile to org and auto-approve (first user / org creator)
     await supabase
       .from("profiles")
-      .update({ organization_id: org.id })
+      .update({ organization_id: org.id, is_approved: true })
       .eq("user_id", user.id);
 
     // Assign admin role
