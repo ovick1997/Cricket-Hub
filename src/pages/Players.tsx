@@ -1,5 +1,5 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Plus, Search, Loader2 } from "lucide-react";
+import { Plus, Search, Loader2, Pencil, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useState } from "react";
 import { PlayerFormDialog, type PlayerFormData } from "@/components/forms/PlayerFormDialog";
@@ -8,6 +8,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { usePermissions } from "@/hooks/usePermissions";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const roleConfig: Record<string, { bg: string; text: string; dot: string }> = {
   batsman: { bg: "bg-accent/10", text: "text-accent", dot: "bg-accent" },
@@ -19,9 +21,13 @@ const roleConfig: Record<string, { bg: string; text: string; dot: string }> = {
 const Players = () => {
   const [search, setSearch] = useState("");
   const [formOpen, setFormOpen] = useState(false);
+  const [editPlayer, setEditPlayer] = useState<any>(null);
+  const [deletePlayer, setDeletePlayer] = useState<any>(null);
   const { organizationId } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission("players.edit");
 
   const { data: players = [], isLoading } = useQuery({
     queryKey: ["players", organizationId],
@@ -54,6 +60,36 @@ const Players = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["players"] });
       toast.success("Player added!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const updatePlayerMutation = useMutation({
+    mutationFn: async ({ id, formData }: { id: string; formData: PlayerFormData }) => {
+      const { error } = await supabase.from("players").update({
+        name: formData.name,
+        role: formData.role,
+        batting_style: formData.battingStyle,
+        bowling_style: formData.bowlingStyle || null,
+        jersey_number: formData.jerseyNumber ?? null,
+      }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      toast.success("Player updated!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deletePlayerMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("players").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      toast.success("Player deleted!");
     },
     onError: (err) => toast.error(err.message),
   });
@@ -114,8 +150,8 @@ const Players = () => {
                 <table className="w-full">
                   <thead>
                     <tr className="bg-muted/30">
-                      {["#", "Player", "Role", "Batting", "Bowling"].map((h) => (
-                        <th key={h} className="text-left px-4 py-3.5 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest first:pl-5 last:pr-5">
+                      {["#", "Player", "Role", "Batting", "Bowling", ...(canEdit ? [""] : [])].map((h) => (
+                        <th key={h || "actions"} className="text-left px-4 py-3.5 text-[10px] font-bold text-muted-foreground/70 uppercase tracking-widest first:pl-5 last:pr-5">
                           {h}
                         </th>
                       ))}
@@ -152,6 +188,24 @@ const Players = () => {
                           </td>
                           <td className="px-4 py-3.5 text-sm text-muted-foreground">{player.batting_style}</td>
                           <td className="px-4 py-3.5 text-sm text-muted-foreground pr-5">{player.bowling_style || "-"}</td>
+                          {canEdit && (
+                            <td className="px-4 py-3.5 pr-5">
+                              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setEditPlayer(player); }}
+                                  className="h-7 w-7 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                  <Pencil className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setDeletePlayer(player); }}
+                                  className="h-7 w-7 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          )}
                         </motion.tr>
                       );
                     })}
@@ -165,34 +219,92 @@ const Players = () => {
               {filtered.map((player, i) => {
                 const rc = roleConfig[player.role] || roleConfig.batsman;
                 return (
-                  <motion.button
+                  <motion.div
                     key={player.id}
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.02 }}
-                    onClick={() => navigate(`/player/${player.id}`)}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-card text-left active:scale-[0.98] transition-all"
+                    className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card"
                   >
-                    <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center ring-1 ring-primary/15 shrink-0">
-                      <span className="text-xs font-bold text-primary">{player.jersey_number ?? player.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</span>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-foreground truncate">{player.name}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded ${rc.bg} ${rc.text}`}>
-                          <span className={`h-1 w-1 rounded-full ${rc.dot}`} />
-                          {player.role}
-                        </span>
-                        <span className="text-[10px] text-muted-foreground">{player.batting_style}</span>
+                    <button
+                      onClick={() => navigate(`/player/${player.id}`)}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 flex items-center justify-center ring-1 ring-primary/15 shrink-0">
+                        <span className="text-xs font-bold text-primary">{player.jersey_number ?? player.name.split(" ").map(n => n[0]).join("").slice(0, 2)}</span>
                       </div>
-                    </div>
-                  </motion.button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{player.name}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold capitalize px-1.5 py-0.5 rounded ${rc.bg} ${rc.text}`}>
+                            <span className={`h-1 w-1 rounded-full ${rc.dot}`} />
+                            {player.role}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">{player.batting_style}</span>
+                        </div>
+                      </div>
+                    </button>
+                    {canEdit && (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => setEditPlayer(player)}
+                          className="h-8 w-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setDeletePlayer(player)}
+                          className="h-8 w-8 rounded-lg hover:bg-destructive/10 flex items-center justify-center text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
                 );
               })}
             </div>
           </>
         )}
       </div>
+
+      {/* Edit Player Dialog */}
+      {editPlayer && (
+        <PlayerFormDialog
+          open={!!editPlayer}
+          onOpenChange={(open) => { if (!open) setEditPlayer(null); }}
+          onSubmit={(data) => updatePlayerMutation.mutate({ id: editPlayer.id, formData: data })}
+          initialData={{
+            name: editPlayer.name,
+            role: editPlayer.role,
+            battingStyle: editPlayer.batting_style,
+            bowlingStyle: editPlayer.bowling_style || "",
+            jerseyNumber: editPlayer.jersey_number ?? undefined,
+          }}
+          mode="edit"
+        />
+      )}
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deletePlayer} onOpenChange={(open) => { if (!open) setDeletePlayer(null); }}>
+        <AlertDialogContent className="bg-card border-border/60">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Player</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{deletePlayer?.name}</strong>? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => { deletePlayerMutation.mutate(deletePlayer.id); setDeletePlayer(null); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };

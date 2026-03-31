@@ -1,13 +1,17 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { ArrowLeft, TrendingUp, Target, Zap, Award, Swords, Calendar, Loader2, Users } from "lucide-react";
+import { ArrowLeft, TrendingUp, Target, Zap, Award, Swords, Calendar, Loader2, Users, Pencil, Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { format } from "date-fns";
+import { usePermissions } from "@/hooks/usePermissions";
+import { PlayerFormDialog, type PlayerFormData } from "@/components/forms/PlayerFormDialog";
+import { toast } from "sonner";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 const roleColors: Record<string, string> = {
   batsman: "bg-primary/15 text-primary",
@@ -19,6 +23,43 @@ const roleColors: Record<string, string> = {
 const PlayerProfile = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { hasPermission } = usePermissions();
+  const queryClient = useQueryClient();
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const canEdit = hasPermission("players.edit");
+
+  const updatePlayer = useMutation({
+    mutationFn: async (formData: PlayerFormData) => {
+      const { error } = await supabase.from("players").update({
+        name: formData.name,
+        role: formData.role,
+        batting_style: formData.battingStyle,
+        bowling_style: formData.bowlingStyle || null,
+        jersey_number: formData.jerseyNumber ?? null,
+      }).eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["player", id] });
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      toast.success("Player updated!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const deletePlayer = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("players").delete().eq("id", id!);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["players"] });
+      toast.success("Player deleted!");
+      navigate("/players");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   const { data: player, isLoading } = useQuery({
     queryKey: ["player", id],
@@ -300,8 +341,28 @@ const PlayerProfile = () => {
                 {player.jersey_number ?? "#"}
               </span>
             </div>
-            <div className="min-w-0">
-              <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground tracking-tight">{player.name}</h1>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-start justify-between gap-2">
+                <h1 className="text-2xl md:text-3xl font-display font-bold text-foreground tracking-tight">{player.name}</h1>
+                {canEdit && (
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <motion.button
+                      whileTap={{ scale: 0.93 }}
+                      onClick={() => setEditOpen(true)}
+                      className="h-8 w-8 rounded-lg bg-muted/50 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </motion.button>
+                    <motion.button
+                      whileTap={{ scale: 0.93 }}
+                      onClick={() => setDeleteOpen(true)}
+                      className="h-8 w-8 rounded-lg bg-destructive/10 hover:bg-destructive/20 flex items-center justify-center text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </motion.button>
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 <Badge className={`text-[10px] ${roleColors[player.role] || ""}`}>{player.role}</Badge>
                 <span className="text-xs text-muted-foreground">{player.batting_style} bat</span>
@@ -565,6 +626,42 @@ const PlayerProfile = () => {
           </div>
         )}
       </div>
+
+      {/* Edit Dialog */}
+      <PlayerFormDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSubmit={(data) => updatePlayer.mutate(data)}
+        initialData={{
+          name: player.name,
+          role: player.role as any,
+          battingStyle: player.batting_style as any,
+          bowlingStyle: player.bowling_style || "",
+          jerseyNumber: player.jersey_number ?? undefined,
+        }}
+        mode="edit"
+      />
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent className="bg-card border-border/60">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Player</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete <strong>{player.name}</strong>? This action cannot be undone and all associated stats will be lost.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="border-border">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deletePlayer.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
