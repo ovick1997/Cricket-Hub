@@ -550,6 +550,12 @@ const Settings = () => {
   const [assignRole, setAssignRole] = useState("viewer");
   const [deleteOrgConfirm, setDeleteOrgConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteOrgInput, setDeleteOrgInput] = useState("");
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserRole, setNewUserRole] = useState("viewer");
+  const [creatingUser, setCreatingUser] = useState(false);
 
   const updateOrg = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
@@ -732,8 +738,17 @@ const Settings = () => {
           {/* MEMBERS TAB */}
           <TabsContent value="members" className="space-y-3 md:space-y-4">
             <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
-              <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">Organization Members</h3>
-              <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">Manage roles and permissions for your team</p>
+              <div className="flex items-center justify-between mb-3 md:mb-4">
+                <div>
+                  <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">Organization Members</h3>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Manage roles and permissions for your team</p>
+                </div>
+                <motion.button whileTap={{ scale: 0.97 }}
+                  onClick={() => setCreateUserOpen(true)}
+                  className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] md:text-xs font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+                  <UserPlus className="h-3 w-3 md:h-3.5 md:w-3.5" /> Create User
+                </motion.button>
+              </div>
               {loadingMembers ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
               ) : members.length === 0 ? (
@@ -1138,6 +1153,77 @@ const Settings = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Create User Dialog */}
+      <Dialog open={createUserOpen} onOpenChange={(open) => { if (!open) { setCreateUserOpen(false); setNewUserEmail(""); setNewUserPassword(""); setNewUserName(""); setNewUserRole("viewer"); } }}>
+        <DialogContent className="sm:max-w-sm bg-card border-border/60">
+          <DialogHeader><DialogTitle className="font-display">Create New User</DialogTitle></DialogHeader>
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            if (!newUserEmail || !newUserPassword) return;
+            setCreatingUser(true);
+            try {
+              const { data: { session } } = await supabase.auth.getSession();
+              const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-create-user`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  "Authorization": `Bearer ${session?.access_token}`,
+                },
+                body: JSON.stringify({
+                  email: newUserEmail,
+                  password: newUserPassword,
+                  full_name: newUserName,
+                  role: newUserRole,
+                }),
+              });
+              const result = await res.json();
+              if (!res.ok) throw new Error(result.error || "Failed to create user");
+              toast.success("User created successfully!");
+              setCreateUserOpen(false);
+              setNewUserEmail(""); setNewUserPassword(""); setNewUserName(""); setNewUserRole("viewer");
+              queryClient.invalidateQueries({ queryKey: ["org-members"] });
+              queryClient.invalidateQueries({ queryKey: ["member-roles"] });
+            } catch (err: any) {
+              toast.error(err.message);
+            } finally {
+              setCreatingUser(false);
+            }
+          }} className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Full Name</Label>
+              <Input value={newUserName} onChange={(e) => setNewUserName(e.target.value)} placeholder="e.g. Rahul Ahmed" className="bg-muted/40 border-border/60" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Email *</Label>
+              <Input type="email" value={newUserEmail} onChange={(e) => setNewUserEmail(e.target.value)} placeholder="user@example.com" className="bg-muted/40 border-border/60" required />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Password *</Label>
+              <Input type="password" value={newUserPassword} onChange={(e) => setNewUserPassword(e.target.value)} placeholder="Min 6 characters" className="bg-muted/40 border-border/60" required minLength={6} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold text-muted-foreground">Role</Label>
+              <Select value={newUserRole} onValueChange={setNewUserRole}>
+                <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="moderator">Moderator</SelectItem>
+                  <SelectItem value="scorer">Scorer</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2 pt-1">
+              <button type="button" onClick={() => setCreateUserOpen(false)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors">Cancel</button>
+              <button type="submit" disabled={creatingUser || !newUserEmail || !newUserPassword} className="flex-1 py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
+                {creatingUser && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                Create User
+              </button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };

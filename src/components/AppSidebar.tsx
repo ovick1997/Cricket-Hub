@@ -12,6 +12,7 @@ import {
   LogOut,
   History,
   BookOpen,
+  KeyRound,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
@@ -128,6 +129,14 @@ export function AppSidebar() {
                 </SidebarMenuButton>
               </SidebarMenuItem>
             )}
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <NavLink to="/account" className="text-sidebar-foreground hover:text-foreground rounded-xl" activeClassName="text-primary">
+                  <KeyRound className="h-4 w-4 shrink-0" />
+                  {!collapsed && <span className="text-[13px]">My Account</span>}
+                </NavLink>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={signOut} className="text-sidebar-foreground hover:text-destructive rounded-xl cursor-pointer">
                 <LogOut className="h-4 w-4 shrink-0" />

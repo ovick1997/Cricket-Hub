@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { LayoutDashboard, Swords, Radio, UserCircle, MoreHorizontal, Trophy, BarChart3, History, Settings, ChevronRight, BookOpen } from "lucide-react";
+import { LayoutDashboard, Swords, Radio, UserCircle, MoreHorizontal, Trophy, BarChart3, History, Settings, ChevronRight, BookOpen, KeyRound } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation, useNavigate } from "react-router-dom";
 import { usePermissions, type PermissionKey } from "@/hooks/usePermissions";
@@ -17,6 +17,7 @@ const moreItems: { title: string; url: string; icon: any; permission: Permission
   { title: "Analytics", url: "/analytics", icon: BarChart3, permission: "analytics" },
   { title: "Match History", url: "/match-history", icon: History, permission: "matches" },
   { title: "Settings", url: "/settings", icon: Settings, permission: "settings" },
+  { title: "My Account", url: "/account", icon: KeyRound, permission: "dashboard" },
   { title: "Documentation", url: "/documentation", icon: BookOpen, permission: "settings" },
 ];
 
