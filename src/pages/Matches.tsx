@@ -1,14 +1,19 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Plus, Loader2, Radio, MapPin, Calendar, History, Award } from "lucide-react";
+import { Plus, Loader2, Radio, MapPin, Calendar, History, Award, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { MatchFormDialog, type MatchFormData } from "@/components/forms/MatchFormDialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const statusFilters = ["all", "live", "upcoming", "completed"] as const;
 
@@ -21,9 +26,12 @@ const filterDots: Record<string, string> = {
 const Matches = () => {
   const [filter, setFilter] = useState<string>("all");
   const [formOpen, setFormOpen] = useState(false);
+  const [deleteMatchId, setDeleteMatchId] = useState<string | null>(null);
   const { organizationId } = useAuth();
+  const { hasPermission } = usePermissions();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const isAdmin = hasPermission("matches.edit");
 
   const { data: matchesData = [], isLoading } = useQuery({
     queryKey: ["matches", organizationId],
@@ -65,6 +73,33 @@ const Matches = () => {
     onError: (err) => toast.error(err.message),
   });
 
+  const deleteMatch = useMutation({
+    mutationFn: async (matchId: string) => {
+      // Delete balls first
+      const { data: innings } = await supabase.from("innings").select("id").eq("match_id", matchId);
+      if (innings && innings.length > 0) {
+        const inningsIds = innings.map((i) => i.id);
+        await supabase.from("balls").delete().in("innings_id", inningsIds);
+      }
+      // Delete innings
+      await supabase.from("innings").delete().eq("match_id", matchId);
+      // Delete match summary
+      await supabase.from("match_summaries").delete().eq("match_id", matchId);
+      // Delete match
+      const { error } = await supabase.from("matches").delete().eq("id", matchId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["matches"] });
+      toast.success("Match deleted! Player stats remain intact.");
+      setDeleteMatchId(null);
+    },
+    onError: (err) => {
+      toast.error(err.message);
+      setDeleteMatchId(null);
+    },
+  });
+
   const filtered = filter === "all" ? matchesData : matchesData.filter((m) => m.status === filter);
 
   return (
@@ -99,6 +134,26 @@ const Matches = () => {
           onOpenChange={setFormOpen}
           onSubmit={(data) => createMatch.mutate(data)}
         />
+
+        <AlertDialog open={!!deleteMatchId} onOpenChange={(open) => !open && setDeleteMatchId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Match</AlertDialogTitle>
+              <AlertDialogDescription>
+                এই ম্যাচ এবং এর সব innings/balls ডিলিট হয়ে যাবে। Player stats থাকবে। এটা undo করা যাবে না।
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={() => deleteMatchId && deleteMatch.mutate(deleteMatchId)}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl overflow-x-auto scrollbar-hide">
           {statusFilters.map((s) => (
@@ -151,7 +206,18 @@ const Matches = () => {
                       {isLive && <Radio className="h-2.5 w-2.5 inline mr-1 animate-pulse-glow" />}
                       {match.status}
                     </span>
-                    <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">{match.overs} ov</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] md:text-[10px] text-muted-foreground font-mono">{match.overs} ov</span>
+                      {isAdmin && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteMatchId(match.id); }}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md hover:bg-destructive/15 text-muted-foreground hover:text-destructive"
+                          title="Delete match"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="space-y-1.5 md:space-y-2.5">
