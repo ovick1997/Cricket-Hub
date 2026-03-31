@@ -372,9 +372,11 @@ const Settings = () => {
   const { data: pendingUsers = [], isLoading: loadingPending } = useQuery({
     queryKey: ["pending-users", organizationId],
     queryFn: async () => {
+      if (!organizationId) return [];
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
+        .eq("organization_id", organizationId)
         .eq("is_approved", false);
       if (error) throw error;
       return data;
