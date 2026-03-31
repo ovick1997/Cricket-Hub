@@ -61,49 +61,62 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, password, full_name, role } = await req.json();
+    const { user_id } = await req.json();
 
-    if (!email || !password) {
-      return new Response(JSON.stringify({ error: "Email and password required" }), {
+    if (!user_id) {
+      return new Response(JSON.stringify({ error: "user_id is required" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // Create user via admin API
-    const { data: newUser, error: createError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: full_name || "" },
-    });
-
-    if (createError) {
-      return new Response(JSON.stringify({ error: createError.message }), {
+    // Prevent self-deletion
+    if (user_id === caller.id) {
+      return new Response(JSON.stringify({ error: "Cannot delete yourself" }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    // The handle_new_user trigger creates the profile automatically.
-    // Now link to org and approve
+    // Verify target user belongs to same org
+    const { data: targetProfile } = await supabaseAdmin
+      .from("profiles")
+      .select("organization_id")
+      .eq("user_id", user_id)
+      .single();
+
+    if (!targetProfile || targetProfile.organization_id !== callerProfile.organization_id) {
+      return new Response(JSON.stringify({ error: "User not in your organization" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Delete user roles
+    await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", user_id)
+      .eq("organization_id", callerProfile.organization_id);
+
+    // Delete profile
     await supabaseAdmin
       .from("profiles")
-      .update({
-        organization_id: callerProfile.organization_id,
-        is_approved: true,
-      })
-      .eq("user_id", newUser.user!.id);
+      .delete()
+      .eq("user_id", user_id);
 
-    // Assign role
-    await supabaseAdmin.from("user_roles").insert({
-      user_id: newUser.user!.id,
-      organization_id: callerProfile.organization_id,
-      role: role || "viewer",
-    });
+    // Delete auth user
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(user_id);
+
+    if (deleteError) {
+      return new Response(JSON.stringify({ error: deleteError.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     return new Response(
-      JSON.stringify({ success: true, user_id: newUser.user!.id }),
+      JSON.stringify({ success: true }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

@@ -490,29 +490,32 @@ const Settings = () => {
     onError: (err) => toast.error(err.message),
   });
 
-  // Remove member
+  // Delete member
   const [removeConfirm, setRemoveConfirm] = useState<{ id: string; userId: string; name: string } | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
   const removeMember = useMutation({
     mutationFn: async ({ profileId, userId }: { profileId: string; userId: string }) => {
       if (!organizationId) throw new Error("No organization");
-      const { error: roleErr } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("organization_id", organizationId);
-      if (roleErr) throw roleErr;
-      const { error } = await supabase
-        .from("profiles")
-        .update({ organization_id: null, is_approved: false })
-        .eq("id", profileId);
-      if (error) throw error;
+      setDeletingUser(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session?.access_token}`,
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to delete user");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["org-members"] });
       queryClient.invalidateQueries({ queryKey: ["member-roles"] });
-      toast.success("Member removed");
+      toast.success("User deleted permanently");
+      setDeletingUser(false);
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => { toast.error(err.message); setDeletingUser(false); },
   });
 
   // Toggle permission
@@ -1096,24 +1099,27 @@ const Settings = () => {
 
       {/* Remove Member Confirmation */}
       <AlertDialog open={!!removeConfirm} onOpenChange={(open) => { if (!open) setRemoveConfirm(null); }}>
-        <AlertDialogContent className="bg-card border-border/60">
+        <AlertDialogContent className="bg-card border-destructive/30">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-display">Remove Member</AlertDialogTitle>
+            <AlertDialogTitle className="font-display text-destructive">Delete User</AlertDialogTitle>
             <AlertDialogDescription>
-              Remove <strong>{removeConfirm?.name}</strong> from the organization? They will need to be re-approved to access the system again.
+              Permanently delete <strong className="text-foreground">{removeConfirm?.name}</strong> from the system? This will remove their account, role, and all access. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => {
+              disabled={deletingUser}
+              onClick={(e) => {
+                e.preventDefault();
                 if (removeConfirm) {
                   removeMember.mutate({ profileId: removeConfirm.id, userId: removeConfirm.userId });
                   setRemoveConfirm(null);
                 }
               }}
-              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Remove
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50">
+              {deletingUser && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+              Delete Permanently
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -8,21 +8,39 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Loader2, Building2 } from "lucide-react";
+import { Loader2, Building2, UserPlus } from "lucide-react";
 
 const OrgSetup = () => {
   const navigate = useNavigate();
-  const { user, organizationId } = useAuth();
+  const { user, organizationId, refetchProfile } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [checking, setChecking] = useState(true);
   const [orgName, setOrgName] = useState("");
+  const [existingOrg, setExistingOrg] = useState<{ id: string; name: string } | null>(null);
 
-  // If org already exists, go to dashboard
+  // If org already exists on profile, go to dashboard
   useEffect(() => {
     if (organizationId) {
       navigate("/", { replace: true });
     }
   }, [organizationId, navigate]);
 
+  // Check if any organization exists in the system
+  useEffect(() => {
+    const checkExistingOrg = async () => {
+      const { data } = await supabase
+        .from("organizations")
+        .select("id, name")
+        .limit(1)
+        .maybeSingle();
+
+      setExistingOrg(data);
+      setChecking(false);
+    };
+    checkExistingOrg();
+  }, []);
+
+  // First user: create org and become admin
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
@@ -30,7 +48,6 @@ const OrgSetup = () => {
 
     const slug = orgName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
 
-    // Create organization
     const { data: org, error: orgError } = await supabase
       .from("organizations")
       .insert({ name: orgName, slug })
@@ -38,13 +55,12 @@ const OrgSetup = () => {
       .single();
 
     if (orgError) {
-      // If INSERT not allowed, we need a different approach
       toast.error("Failed to create organization: " + orgError.message);
       setLoading(false);
       return;
     }
 
-    // Link profile to org and auto-approve (first user / org creator)
+    // Link profile to org and auto-approve (org creator = admin)
     await supabase
       .from("profiles")
       .update({ organization_id: org.id, is_approved: true })
@@ -55,12 +71,81 @@ const OrgSetup = () => {
       .from("user_roles")
       .insert({ user_id: user.id, organization_id: org.id, role: "admin" });
 
-    toast.success("Organization created!");
+    toast.success("Organization created! You are the admin.");
     setLoading(false);
-    // Force page reload to refresh org context
     window.location.href = "/dashboard";
   };
 
+  // Subsequent users: join existing org as viewer (pending approval)
+  const handleJoinOrg = async () => {
+    if (!user || !existingOrg) return;
+    setLoading(true);
+
+    // Link profile to org (NOT approved - admin must approve)
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ organization_id: existingOrg.id, is_approved: false })
+      .eq("user_id", user.id);
+
+    if (profileError) {
+      toast.error("Failed to join organization: " + profileError.message);
+      setLoading(false);
+      return;
+    }
+
+    // Assign viewer role
+    await supabase
+      .from("user_roles")
+      .insert({ user_id: user.id, organization_id: existingOrg.id, role: "viewer" });
+
+    toast.success("Request sent! Waiting for admin approval.");
+    setLoading(false);
+    refetchProfile();
+  };
+
+  if (checking) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // If an org exists, show "Join" screen
+  if (existingOrg) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md"
+        >
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
+              <UserPlus className="w-7 h-7 text-primary" />
+            </div>
+            <h1 className="text-2xl font-display font-bold text-foreground">Join Organization</h1>
+            <p className="text-sm text-muted-foreground mt-1">You'll be added as a viewer pending admin approval</p>
+          </div>
+
+          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
+            <CardHeader>
+              <CardTitle className="text-lg">{existingOrg.name}</CardTitle>
+              <CardDescription>Click below to request access to this organization</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={handleJoinOrg} className="w-full" disabled={loading}>
+                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
+                Join as Viewer
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    );
+  }
+
+  // No org exists: show create screen (first user becomes admin)
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <motion.div
@@ -73,13 +158,13 @@ const OrgSetup = () => {
             <Building2 className="w-7 h-7 text-primary" />
           </div>
           <h1 className="text-2xl font-display font-bold text-foreground">Set Up Your Organization</h1>
-          <p className="text-sm text-muted-foreground mt-1">Create your cricket organization to get started</p>
+          <p className="text-sm text-muted-foreground mt-1">You'll be the admin of this organization</p>
         </div>
 
         <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-lg">Organization Details</CardTitle>
-            <CardDescription>This will be your team management workspace</CardDescription>
+            <CardDescription>This will be your cricket management workspace</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
