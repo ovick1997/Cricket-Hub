@@ -1,0 +1,1 @@
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS players_per_team integer NOT NULL DEFAULT 11;

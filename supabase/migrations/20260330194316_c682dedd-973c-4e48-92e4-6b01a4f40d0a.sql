@@ -1,0 +1,1 @@
+ALTER TABLE public.team_players ADD COLUMN is_captain boolean NOT NULL DEFAULT false;

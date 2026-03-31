@@ -1,0 +1,1 @@
+ALTER TABLE public.matches ADD COLUMN man_of_match_id uuid REFERENCES public.players(id) ON DELETE SET NULL;
