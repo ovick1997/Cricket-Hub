@@ -301,12 +301,38 @@ When creating match from tournament: settings inherit from tournament
 ### Player Stats Auto-Computation
 
 The `archive_completed_match()` trigger fires when `matches.status` changes to `'completed'`:
-- Aggregates batting stats from balls (runs, 4s, 6s, balls faced)
+- Aggregates batting stats **per-innings** from balls (runs, 4s, 6s, balls faced)
+- Correctly counts fifties (50-99 in one innings) and hundreds (100+ in one innings)
 - Aggregates bowling stats (overs, runs conceded, wickets)
 - Aggregates fielding stats (catches, run outs, stumpings)
+- Ensures `matches_played` is incremented only once per unique player
 - Upserts into `player_stats` table
 - Creates/updates `match_summaries` for quick result display
-- Archives old match ball data (keeps last 20 matches' ball data)
+
+### Player Rankings System
+
+Performance-based auto-ranking with three categories:
+
+**Batting Rating:**
+```
+rating = (avg × 3) + (SR × 0.8) + (runs × 0.5) + (4s × 2 + 6s × 5) + (50s × 15 + 100s × 50)
+```
+
+**Bowling Rating:**
+```
+rating = (wickets × 25) + economy_bonus + average_bonus + (5W × 40)
+```
+
+**All-Rounder Rating:**
+```
+rating = (batting_rating × 0.5) + (bowling_rating × 0.5)
+```
+
+Rankings are available on both the admin Rankings page and the Public Leaderboard page.
+
+### Stats Recalculation
+
+Admin can trigger a full recalculation of `player_stats` from historical ball data via Settings. This truncates and rebuilds all stats from the `balls` table, ensuring accuracy after bug fixes or data corrections.
 
 ---
 
@@ -803,4 +829,4 @@ supabase db execute --sql "SELECT COUNT(*) FROM matches;"
 
 ---
 
-*Last updated: March 2026*
+*Last updated: April 2026*

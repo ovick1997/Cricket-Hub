@@ -98,6 +98,22 @@ const sections: DocSection[] = [
     ],
   },
   {
+    id: "rankings",
+    icon: Trophy,
+    title: "Player Rankings",
+    category: "📖 User Guide",
+    steps: [
+      { title: "Rankings কিভাবে কাজ করে?", description: "Player Rankings performance-based automated system। প্রতিটি match complete হলে player_stats table automatically update হয় এবং ranking recalculate হয়।" },
+      { title: "Batting Rating", description: "Batting rating এর formula:\n• Average × 3\n• Strike Rate × 0.8\n• Total Runs × 0.5\n• Boundary Bonus: Fours × 2 + Sixes × 5\n• Milestone Bonus: Fifties × 15 + Hundreds × 50\n\nসব মিলিয়ে weighted score বের হয়।" },
+      { title: "Bowling Rating", description: "Bowling rating এর formula:\n• Wickets × 25\n• Low Economy Bonus\n• Low Average Bonus\n• 5-Wicket Haul Bonus × 40\n\nEconomy ও Average কম হলে bonus বেশি।" },
+      { title: "All-Rounder Rating", description: "All-Rounder rating = (Batting Rating × 0.5) + (Bowling Rating × 0.5)\n\nBatting ও Bowling দুটোতেই ভালো performance দরকার।" },
+      { title: "Rankings Page দেখুন", description: "Dashboard → Rankings page এ 3 টি tab আছে:\n• 🏏 Batting Rankings — Top batsmen by batting rating\n• 🎳 Bowling Rankings — Top bowlers by bowling rating\n• ⭐ All-Rounder Rankings — Combined performance\n\nপ্রতিটি player এর detailed stats (avg, SR, wickets, economy) দেখা যায়।" },
+      { title: "Public Rankings", description: "Public Leaderboard page এও Rankings tab আছে। বাইরের মানুষ (without login) ও দেখতে পারবে top performers কারা।" },
+      { title: "Stats Recalculation", description: "যদি stats ভুল মনে হয়, admin Settings থেকে 'Recalculate Stats' option ব্যবহার করতে পারবে। এটি সব historical ball data থেকে fresh stats rebuild করবে।" },
+      { title: "Fifties ও Hundreds", description: "Fifties ও Hundreds per-innings basis এ count হয়। একটি innings এ 50-99 runs = 1 Fifty, 100+ runs = 1 Hundred।" },
+    ],
+  },
+  {
     id: "settings",
     icon: Settings,
     title: "Settings & Roles",
