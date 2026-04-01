@@ -41,6 +41,7 @@ const mainItems: { title: string; url: string; icon: any; permission: Permission
   { title: "Players", url: "/players", icon: UserCircle, permission: "players" },
   { title: "Tournaments", url: "/tournaments", icon: Trophy, permission: "tournaments" },
   { title: "Analytics", url: "/analytics", icon: BarChart3, permission: "analytics" },
+  { title: "Rankings", url: "/rankings", icon: Trophy, permission: "analytics" },
 ];
 
 export function AppSidebar() {

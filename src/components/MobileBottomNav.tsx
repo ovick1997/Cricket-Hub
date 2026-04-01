@@ -16,6 +16,7 @@ const moreItems: { title: string; url: string; icon: any; permission: Permission
   { title: "Teams", url: "/teams", icon: Users, permission: "teams" },
   { title: "Tournaments", url: "/tournaments", icon: Trophy, permission: "tournaments" },
   { title: "Analytics", url: "/analytics", icon: BarChart3, permission: "analytics" },
+  { title: "Rankings", url: "/rankings", icon: Trophy, permission: "analytics" },
   { title: "Match History", url: "/match-history", icon: History, permission: "matches" },
   { title: "Settings", url: "/settings", icon: Settings, permission: "settings" },
   { title: "My Account", url: "/account", icon: KeyRound, permission: "dashboard" },

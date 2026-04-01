@@ -29,6 +29,7 @@ import MatchHistory from "./pages/MatchHistory.tsx";
 import TournamentDetails from "./pages/TournamentDetails.tsx";
 import Documentation from "./pages/Documentation.tsx";
 import Account from "./pages/Account.tsx";
+import Rankings from "./pages/Rankings.tsx";
 import NotFound from "./pages/NotFound.tsx";
 
 const queryClient = new QueryClient();
@@ -62,6 +63,7 @@ const App = () => (
             <Route path="/tournaments" element={<ProtectedRoute requiredPermission="tournaments"><Tournaments /></ProtectedRoute>} />
             <Route path="/tournaments/:id" element={<ProtectedRoute requiredPermission="tournaments"><TournamentDetails /></ProtectedRoute>} />
             <Route path="/analytics" element={<ProtectedRoute requiredPermission="analytics"><Analytics /></ProtectedRoute>} />
+            <Route path="/rankings" element={<ProtectedRoute requiredPermission="analytics"><Rankings /></ProtectedRoute>} />
             <Route path="/scorecard/:id" element={<ProtectedRoute requiredPermission="matches"><Scorecard /></ProtectedRoute>} />
             <Route path="/player/:id" element={<ProtectedRoute requiredPermission="players"><PlayerProfile /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute requiredPermission="settings"><Settings /></ProtectedRoute>} />
