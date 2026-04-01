@@ -1430,9 +1430,10 @@ function ScoringInterface({ matchId, onBack }: { matchId: string; onBack: () => 
   const addBall = useCallback((runs: number, extra?: string, wicket?: string, isNonStrikerOut?: boolean, wicketFielderId?: string | null) => {
     // Prevent rapid duplicate submissions
     if (saveBall.isPending) return;
-    // Short Chris rule: hitting a 6 means batsman is out
+    // Short Chris rule: hitting a 6 means batsman is out, no runs scored
     if (isShortChris && runs === 6 && !extra && !wicket) {
       wicket = "Hit Wicket";
+      runs = 0;
     }
     if (needsFielder(wicket) && !wicketFielderId) {
       setPendingWicket({ wicketType: wicket!, isNonStrikerOut, runs, extraType: extra });
