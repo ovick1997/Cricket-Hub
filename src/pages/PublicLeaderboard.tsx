@@ -1,8 +1,9 @@
+import { useMemo } from "react";
 import { PublicLayout } from "@/components/PublicLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Trophy, Target, TrendingUp, Shield, Loader2 } from "lucide-react";
-import { motion } from "framer-motion";
+import { Trophy, Target, TrendingUp, Star, Loader2, Crown, Medal, Award } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
@@ -32,13 +33,133 @@ interface PlayerStat {
   player?: { name: string; role: string; photo_url: string | null };
 }
 
+function calcBattingRating(s: PlayerStat): number {
+  if (s.innings_batted === 0) return 0;
+  const avg = s.total_runs / Math.max(s.innings_batted - s.not_outs, 1);
+  const sr = s.balls_faced > 0 ? (s.total_runs / s.balls_faced) * 100 : 0;
+  return Math.round((avg * 3) + (sr * 0.8) + (s.total_runs * 0.5) + (s.fours * 2 + s.sixes * 5) + (s.fifties * 15 + s.hundreds * 50));
+}
+
+function calcBowlingRating(s: PlayerStat): number {
+  if (s.innings_bowled === 0 || s.overs_bowled === 0) return 0;
+  const bowlAvg = s.wickets_taken > 0 ? s.runs_conceded / s.wickets_taken : 999;
+  const econ = s.runs_conceded / Number(s.overs_bowled);
+  return Math.round((s.wickets_taken * 25) + Math.max(0, 100 - bowlAvg * 2) + Math.max(0, 80 - econ * 8) + (s.five_wickets * 50));
+}
+
+function calcAllRounderRating(s: PlayerStat): number {
+  const bat = calcBattingRating(s);
+  const bowl = calcBowlingRating(s);
+  if (bat === 0 && bowl === 0) return 0;
+  if (bat === 0 || bowl === 0) return Math.max(bat, bowl) * 0.4;
+  return Math.round(bat * 0.5 + bowl * 0.5 + Math.min(bat, bowl) * 0.2);
+}
+
 const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
 
-const getRankStyle = (i: number) => {
-  if (i === 0) return "bg-gradient-to-br from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 text-yellow-400";
-  if (i === 1) return "bg-gradient-to-br from-slate-300/15 to-slate-400/5 border-slate-400/25 text-slate-300";
-  if (i === 2) return "bg-gradient-to-br from-amber-700/15 to-amber-800/5 border-amber-600/25 text-amber-500";
-  return "bg-muted/30 border-border/40 text-muted-foreground";
+const rankBadge = (i: number) => {
+  if (i === 0) return <Crown className="h-5 w-5 text-yellow-400" />;
+  if (i === 1) return <Medal className="h-5 w-5 text-gray-300" />;
+  if (i === 2) return <Award className="h-5 w-5 text-amber-600" />;
+  return <span className="text-xs font-bold text-muted-foreground w-5 text-center">{i + 1}</span>;
+};
+
+const getRankBg = (i: number) => {
+  if (i === 0) return "border-yellow-500/30 bg-yellow-500/5";
+  if (i === 1) return "border-gray-400/20 bg-gray-400/5";
+  if (i === 2) return "border-amber-600/20 bg-amber-700/5";
+  return "border-border/40 bg-card/50";
+};
+
+const getRatingColor = (i: number) => {
+  if (i === 0) return "text-yellow-400";
+  if (i === 1) return "text-gray-300";
+  if (i === 2) return "text-amber-500";
+  return "text-foreground";
+};
+
+const getBarColor = (i: number) => {
+  if (i === 0) return "bg-gradient-to-r from-yellow-500 to-yellow-400";
+  if (i === 1) return "bg-gradient-to-r from-gray-400 to-gray-300";
+  if (i === 2) return "bg-gradient-to-r from-amber-600 to-amber-500";
+  return "bg-primary/60";
+};
+
+type RankedStat = PlayerStat & { rating: number };
+
+const RankingList = ({ items, tab, maxRating }: { items: RankedStat[]; tab: string; maxRating: number }) => {
+  if (items.length === 0) {
+    return (
+      <div className="text-center py-16 text-muted-foreground">
+        <Trophy className="h-10 w-10 mx-auto mb-3 opacity-30" />
+        <p className="text-sm">No data available yet</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <AnimatePresence mode="wait">
+        {items.map((item, i) => (
+          <motion.div
+            key={item.player_id}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.03, duration: 0.25 }}
+            className={`rounded-xl border transition-all ${getRankBg(i)}`}
+          >
+            <div className="flex items-center gap-2.5 sm:gap-3 p-3 sm:p-4">
+              <div className="w-7 flex items-center justify-center shrink-0">
+                {rankBadge(i)}
+              </div>
+              <Avatar className="h-9 w-9 sm:h-10 sm:w-10">
+                {item.player?.photo_url && <AvatarImage src={item.player.photo_url} />}
+                <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">
+                  {getInitials(item.player?.name || "?")}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-foreground truncate">{item.player?.name || "Unknown"}</p>
+                <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                  {tab === "batting" && (
+                    <span>
+                      {item.total_runs} runs • Avg {(item.total_runs / Math.max(item.innings_batted - item.not_outs, 1)).toFixed(1)} • SR {item.balls_faced > 0 ? ((item.total_runs / item.balls_faced) * 100).toFixed(1) : "—"}
+                      <span className="hidden sm:inline"> • {item.fifties}×50 {item.hundreds}×100</span>
+                    </span>
+                  )}
+                  {tab === "bowling" && (
+                    <span>
+                      {item.wickets_taken} wkts • Econ {Number(item.overs_bowled) > 0 ? (item.runs_conceded / Number(item.overs_bowled)).toFixed(2) : "—"} • Avg {item.wickets_taken > 0 ? (item.runs_conceded / item.wickets_taken).toFixed(1) : "—"}
+                      <span className="hidden sm:inline"> • {item.five_wickets}×5W</span>
+                    </span>
+                  )}
+                  {tab === "all-rounder" && (
+                    <span>{item.total_runs} runs • {item.wickets_taken} wkts • {item.matches_played}M</span>
+                  )}
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <p className={`text-lg sm:text-xl font-display font-black tabular-nums ${getRatingColor(i)}`}>
+                  {item.rating}
+                </p>
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Rating</p>
+              </div>
+            </div>
+            <div className="px-3 sm:px-4 pb-3">
+              <div className="h-1 rounded-full bg-muted/30 overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(item.rating / maxRating) * 100}%` }}
+                  transition={{ duration: 0.6, delay: i * 0.05 }}
+                  className={`h-full rounded-full ${getBarColor(i)}`}
+                />
+              </div>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
 };
 
 const PublicLeaderboard = () => {
@@ -48,46 +169,34 @@ const PublicLeaderboard = () => {
       const { data, error } = await supabase
         .from("player_stats")
         .select("*, player:players(name, role, photo_url)")
-        .gt("matches_played", 0)
-        .order("total_runs", { ascending: false });
+        .gt("matches_played", 0);
       if (error) throw error;
       return (data || []) as unknown as PlayerStat[];
     },
   });
 
-  const topBatsmen = [...stats]
-    .filter(s => s.innings_batted > 0)
-    .sort((a, b) => b.total_runs - a.total_runs)
-    .slice(0, 20);
-
-  const topBowlers = [...stats]
-    .filter(s => s.wickets_taken > 0)
-    .sort((a, b) => {
-      if (b.wickets_taken !== a.wickets_taken) return b.wickets_taken - a.wickets_taken;
-      const aEcon = a.overs_bowled > 0 ? a.runs_conceded / Number(a.overs_bowled) : 999;
-      const bEcon = b.overs_bowled > 0 ? b.runs_conceded / Number(b.overs_bowled) : 999;
-      return aEcon - bEcon;
-    })
-    .slice(0, 20);
-
-  const topFielders = [...stats]
-    .filter(s => (s.catches + s.run_outs + s.stumpings) > 0)
-    .sort((a, b) => (b.catches + b.run_outs + b.stumpings) - (a.catches + a.run_outs + a.stumpings))
-    .slice(0, 20);
-
-  const maxRuns = topBatsmen[0]?.total_runs || 1;
-  const maxWickets = topBowlers[0]?.wickets_taken || 1;
-  const maxDismissals = topFielders[0] ? (topFielders[0].catches + topFielders[0].run_outs + topFielders[0].stumpings) : 1;
+  const battingRanked = useMemo(
+    () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcBattingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    [stats]
+  );
+  const bowlingRanked = useMemo(
+    () => stats.filter(s => s.innings_bowled > 0 && s.overs_bowled > 0).map(s => ({ ...s, rating: calcBowlingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    [stats]
+  );
+  const allRounderRanked = useMemo(
+    () => stats.filter(s => s.innings_batted > 0 && s.innings_bowled > 0).map(s => ({ ...s, rating: calcAllRounderRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    [stats]
+  );
 
   return (
     <PublicLayout>
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6">
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-1">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2">
-            <Trophy className="h-3.5 w-3.5" /> Leaderboard
+            <Trophy className="h-3.5 w-3.5" /> Rankings
           </div>
           <h1 className="text-2xl sm:text-3xl font-display font-black text-foreground tracking-tight">Player Rankings</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">Top performers across all matches</p>
+          <p className="text-xs sm:text-sm text-muted-foreground">Performance-based auto rankings across all matches</p>
         </motion.div>
 
         {isLoading ? (
@@ -99,126 +208,25 @@ const PublicLeaderboard = () => {
         ) : (
           <Tabs defaultValue="batting" className="w-full">
             <TabsList className="w-full grid grid-cols-3 bg-card border border-border">
-              <TabsTrigger value="batting" className="text-xs sm:text-sm gap-1"><TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Batting</TabsTrigger>
-              <TabsTrigger value="bowling" className="text-xs sm:text-sm gap-1"><Target className="h-3.5 w-3.5 hidden sm:block" />Bowling</TabsTrigger>
-              <TabsTrigger value="fielding" className="text-xs sm:text-sm gap-1"><Shield className="h-3.5 w-3.5 hidden sm:block" />Fielding</TabsTrigger>
+              <TabsTrigger value="batting" className="text-xs sm:text-sm gap-1">
+                <Target className="h-3.5 w-3.5 hidden sm:block" />Batting
+              </TabsTrigger>
+              <TabsTrigger value="bowling" className="text-xs sm:text-sm gap-1">
+                <TrendingUp className="h-3.5 w-3.5 hidden sm:block" />Bowling
+              </TabsTrigger>
+              <TabsTrigger value="all-rounder" className="text-xs sm:text-sm gap-1">
+                <Star className="h-3.5 w-3.5 hidden sm:block" />All-Rounder
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="batting" className="mt-4 space-y-2">
-              {topBatsmen.length === 0 && <p className="text-center text-muted-foreground text-sm py-10">No batting data yet</p>}
-              {topBatsmen.map((p, i) => {
-                const avg = p.innings_batted - p.not_outs > 0
-                  ? (p.total_runs / (p.innings_batted - p.not_outs)).toFixed(1) : "—";
-                const sr = p.balls_faced > 0 ? ((p.total_runs / p.balls_faced) * 100).toFixed(1) : "—";
-                return (
-                  <motion.div key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                    className={`rounded-xl border p-3 sm:p-4 ${getRankStyle(i)}`}>
-                    <div className="flex items-center gap-2.5 sm:gap-3">
-                      <span className="text-xs font-mono font-black w-5 text-center">{i + 1}</span>
-                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-                        {p.player?.photo_url && <AvatarImage src={p.player.photo_url} />}
-                        <AvatarFallback className="bg-primary/10 text-primary text-[10px] font-bold">{getInitials(p.player?.name || "?")}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">{p.player?.name || "Unknown"}</p>
-                        <div className="flex gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                          <span>{p.matches_played}M</span>
-                          <span>{p.innings_batted}Inn</span>
-                          <span>HS {p.highest_score}</span>
-                          <span className="hidden sm:inline">Avg {avg}</span>
-                          <span className="hidden sm:inline">SR {sr}</span>
-                          <span className="text-primary font-semibold">{p.hundreds}×💯</span>
-                          <span className="text-accent font-semibold">{p.fifties}×50</span>
-                        </div>
-                        <div className="w-full bg-muted/40 rounded-full h-1 mt-1.5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${(p.total_runs / maxRuns) * 100}%` }}
-                            transition={{ delay: i * 0.05, duration: 0.5 }}
-                            className="bg-gradient-to-r from-primary to-primary/50 h-1 rounded-full" />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-lg sm:text-xl font-display font-black text-foreground">{p.total_runs}</p>
-                        <p className="text-[9px] text-muted-foreground">runs</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+            <TabsContent value="batting" className="mt-4">
+              <RankingList items={battingRanked} tab="batting" maxRating={battingRanked[0]?.rating || 1} />
             </TabsContent>
-
-            <TabsContent value="bowling" className="mt-4 space-y-2">
-              {topBowlers.length === 0 && <p className="text-center text-muted-foreground text-sm py-10">No bowling data yet</p>}
-              {topBowlers.map((p, i) => {
-                const econ = Number(p.overs_bowled) > 0 ? (p.runs_conceded / Number(p.overs_bowled)).toFixed(1) : "—";
-                const bbDisplay = p.best_bowling_runs < 999 ? `${p.best_bowling_wickets}/${p.best_bowling_runs}` : "—";
-                return (
-                  <motion.div key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                    className={`rounded-xl border p-3 sm:p-4 ${getRankStyle(i)}`}>
-                    <div className="flex items-center gap-2.5 sm:gap-3">
-                      <span className="text-xs font-mono font-black w-5 text-center">{i + 1}</span>
-                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-                        {p.player?.photo_url && <AvatarImage src={p.player.photo_url} />}
-                        <AvatarFallback className="bg-info/10 text-info text-[10px] font-bold">{getInitials(p.player?.name || "?")}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">{p.player?.name || "Unknown"}</p>
-                        <div className="flex gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                          <span>{p.matches_played}M</span>
-                          <span>{p.overs_bowled}Ov</span>
-                          <span>BB {bbDisplay}</span>
-                          <span className="hidden sm:inline">Econ {econ}</span>
-                          <span className="text-primary font-semibold">{p.five_wickets}×5W</span>
-                        </div>
-                        <div className="w-full bg-muted/40 rounded-full h-1 mt-1.5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${(p.wickets_taken / maxWickets) * 100}%` }}
-                            transition={{ delay: i * 0.05, duration: 0.5 }}
-                            className="bg-gradient-to-r from-info to-info/50 h-1 rounded-full" />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-lg sm:text-xl font-display font-black text-foreground">{p.wickets_taken}</p>
-                        <p className="text-[9px] text-muted-foreground">wickets</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+            <TabsContent value="bowling" className="mt-4">
+              <RankingList items={bowlingRanked} tab="bowling" maxRating={bowlingRanked[0]?.rating || 1} />
             </TabsContent>
-
-            <TabsContent value="fielding" className="mt-4 space-y-2">
-              {topFielders.length === 0 && <p className="text-center text-muted-foreground text-sm py-10">No fielding data yet</p>}
-              {topFielders.map((p, i) => {
-                const total = p.catches + p.run_outs + p.stumpings;
-                return (
-                  <motion.div key={p.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}
-                    className={`rounded-xl border p-3 sm:p-4 ${getRankStyle(i)}`}>
-                    <div className="flex items-center gap-2.5 sm:gap-3">
-                      <span className="text-xs font-mono font-black w-5 text-center">{i + 1}</span>
-                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
-                        {p.player?.photo_url && <AvatarImage src={p.player.photo_url} />}
-                        <AvatarFallback className="bg-accent/10 text-accent text-[10px] font-bold">{getInitials(p.player?.name || "?")}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-foreground truncate">{p.player?.name || "Unknown"}</p>
-                        <div className="flex gap-2 sm:gap-3 text-[10px] sm:text-xs text-muted-foreground mt-0.5">
-                          <span>{p.catches}Ct</span>
-                          <span>{p.run_outs}RO</span>
-                          <span>{p.stumpings}St</span>
-                        </div>
-                        <div className="w-full bg-muted/40 rounded-full h-1 mt-1.5">
-                          <motion.div initial={{ width: 0 }} animate={{ width: `${(total / maxDismissals) * 100}%` }}
-                            transition={{ delay: i * 0.05, duration: 0.5 }}
-                            className="bg-gradient-to-r from-accent to-accent/50 h-1 rounded-full" />
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-lg sm:text-xl font-display font-black text-foreground">{total}</p>
-                        <p className="text-[9px] text-muted-foreground">dismissals</p>
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+            <TabsContent value="all-rounder" className="mt-4">
+              <RankingList items={allRounderRanked} tab="all-rounder" maxRating={allRounderRanked[0]?.rating || 1} />
             </TabsContent>
           </Tabs>
         )}
