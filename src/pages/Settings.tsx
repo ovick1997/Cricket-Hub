@@ -57,6 +57,13 @@ const roleColors: Record<string, string> = {
 
 const ROLES = ["admin", "moderator", "scorer", "viewer"] as const;
 
+type AssignableProfile = {
+  user_id: string;
+  full_name: string | null;
+  organization_id: string | null;
+  is_approved: boolean;
+};
+
 function ExportDataButton({ organizationId, orgName }: { organizationId: string; orgName: string }) {
   const [exporting, setExporting] = useState(false);
 
@@ -431,19 +438,55 @@ const Settings = () => {
 
   const org = useMemo(() => allOrgs.find(o => o.id === organizationId) || null, [allOrgs, organizationId]);
 
+  // Org edit & create
+  const [orgName, setOrgName] = useState("");
+  const [editingOrg, setEditingOrg] = useState(false);
+  const [editingOrgId, setEditingOrgId] = useState<string | null>(null);
+  const [creatingOrg, setCreatingOrg] = useState(false);
+  const [newOrgName, setNewOrgName] = useState("");
+  const [assignMemberOrgId, setAssignMemberOrgId] = useState<string | null>(null);
+  const [assignUserId, setAssignUserId] = useState("");
+  const [assignRole, setAssignRole] = useState("viewer");
+  const [deleteOrgConfirm, setDeleteOrgConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [deleteOrgInput, setDeleteOrgInput] = useState("");
+  const [createUserOpen, setCreateUserOpen] = useState(false);
+  const [newUserEmail, setNewUserEmail] = useState("");
+  const [newUserPassword, setNewUserPassword] = useState("");
+  const [newUserName, setNewUserName] = useState("");
+  const [newUserRole, setNewUserRole] = useState("viewer");
+  const [creatingUser, setCreatingUser] = useState(false);
+
   // All profiles (for assigning unassigned users to orgs)
-  const { data: allProfiles = [] } = useQuery({
+  const { data: allProfiles = [], isLoading: loadingAllProfiles } = useQuery<AssignableProfile[]>({
     queryKey: ["all-profiles"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("is_approved", true);
-      if (error) throw error;
-      return data;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) throw new Error("Unauthorized");
+
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-list-users`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${session.access_token}`,
+        },
+      });
+
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to load users");
+      return result.users ?? [];
     },
     enabled: isAdmin,
   });
+
+  const organizationNameById = useMemo(
+    () => Object.fromEntries(allOrgs.map((org: any) => [org.id, org.name])),
+    [allOrgs]
+  );
+
+  const assignableProfiles = useMemo(
+    () => allProfiles.filter((profile) => profile.organization_id !== assignMemberOrgId),
+    [allProfiles, assignMemberOrgId]
+  );
 
   // Approve user
   const approveUser = useMutation({
@@ -496,7 +539,7 @@ const Settings = () => {
   const [removeConfirm, setRemoveConfirm] = useState<{ id: string; userId: string; name: string } | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
   const removeMember = useMutation({
-    mutationFn: async ({ profileId, userId }: { profileId: string; userId: string }) => {
+    mutationFn: async ({ profileId: _profileId, userId }: { profileId: string; userId: string }) => {
       if (!organizationId) throw new Error("No organization");
       setDeletingUser(true);
       const { data: { session } } = await supabase.auth.getSession();
@@ -543,24 +586,6 @@ const Settings = () => {
     },
     onError: (err) => toast.error(err.message),
   });
-
-  // Org edit & create
-  const [orgName, setOrgName] = useState("");
-  const [editingOrg, setEditingOrg] = useState(false);
-  const [editingOrgId, setEditingOrgId] = useState<string | null>(null);
-  const [creatingOrg, setCreatingOrg] = useState(false);
-  const [newOrgName, setNewOrgName] = useState("");
-  const [assignMemberOrgId, setAssignMemberOrgId] = useState<string | null>(null);
-  const [assignUserId, setAssignUserId] = useState("");
-  const [assignRole, setAssignRole] = useState("viewer");
-  const [deleteOrgConfirm, setDeleteOrgConfirm] = useState<{ id: string; name: string } | null>(null);
-  const [deleteOrgInput, setDeleteOrgInput] = useState("");
-  const [createUserOpen, setCreateUserOpen] = useState(false);
-  const [newUserEmail, setNewUserEmail] = useState("");
-  const [newUserPassword, setNewUserPassword] = useState("");
-  const [newUserName, setNewUserName] = useState("");
-  const [newUserRole, setNewUserRole] = useState("viewer");
-  const [creatingUser, setCreatingUser] = useState(false);
 
   const updateOrg = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
@@ -968,7 +993,7 @@ const Settings = () => {
 
               <div className="space-y-2">
                 {allOrgs.map((o: any) => {
-                  const orgMembers = allProfiles.filter((p: any) => p.organization_id === o.id);
+                  const orgMembers = allProfiles.filter((p) => p.organization_id === o.id && p.is_approved);
                   const isCurrent = o.id === organizationId;
                   return (
                     <motion.div key={o.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -1062,11 +1087,20 @@ const Settings = () => {
               <Select value={assignUserId} onValueChange={setAssignUserId}>
                 <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue placeholder="Choose a user" /></SelectTrigger>
                 <SelectContent>
-                  {allProfiles
-                    .filter((p: any) => p.organization_id !== assignMemberOrgId)
-                    .map((p: any) => (
-                      <SelectItem key={p.id} value={p.user_id}>{p.full_name || `User ${p.user_id.slice(0, 8)}`}</SelectItem>
-                    ))}
+                  {loadingAllProfiles ? (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">Loading users...</div>
+                  ) : assignableProfiles.length > 0 ? (
+                    assignableProfiles.map((p) => (
+                      <SelectItem key={p.user_id} value={p.user_id}>
+                        {p.full_name || `User ${p.user_id.slice(0, 8)}`}
+                        {p.organization_id
+                          ? ` • ${organizationNameById[p.organization_id] || "Assigned"}`
+                          : " • Unassigned"}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="px-2 py-3 text-xs text-muted-foreground">No eligible users found</div>
+                  )}
                 </SelectContent>
               </Select>
             </div>
