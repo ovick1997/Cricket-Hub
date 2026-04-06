@@ -1,18 +1,33 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Loader2, KeyRound, User } from "lucide-react";
+import { Loader2, KeyRound, User, Building2, Shield } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 const Account = () => {
-  const { user } = useAuth();
+  const { user, organizationId, userRole } = useAuth();
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [orgName, setOrgName] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchOrgName = async () => {
+      if (!organizationId) return;
+      const { data } = await supabase
+        .from("organizations")
+        .select("name")
+        .eq("id", organizationId)
+        .maybeSingle();
+      setOrgName(data?.name ?? null);
+    };
+    fetchOrgName();
+  }, [organizationId]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,6 +72,20 @@ const Account = () => {
               <span className="text-xs text-muted-foreground w-14 shrink-0">Email</span>
               <span className="text-sm font-medium text-foreground truncate">{user?.email}</span>
             </div>
+            {orgName && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/20 border border-border/50">
+                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground w-14 shrink-0">Org</span>
+                <span className="text-sm font-medium text-foreground truncate">{orgName}</span>
+              </div>
+            )}
+            {userRole && (
+              <div className="flex items-center gap-3 p-3 rounded-xl bg-muted/20 border border-border/50">
+                <Shield className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="text-xs text-muted-foreground w-14 shrink-0">Role</span>
+                <Badge variant="secondary" className="capitalize text-xs">{userRole}</Badge>
+              </div>
+            )}
           </div>
         </motion.div>
 
