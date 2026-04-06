@@ -770,6 +770,7 @@ const Settings = () => {
 
           {/* MEMBERS TAB */}
           <TabsContent value="members" className="space-y-3 md:space-y-4">
+            {/* Current Org Members */}
             <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
               <div className="flex items-center justify-between mb-3 md:mb-4">
                 <div>
@@ -831,6 +832,70 @@ const Settings = () => {
                 </div>
               )}
             </div>
+
+            {/* Unassigned / Other Org Users */}
+            {(() => {
+              const unassignedUsers = allProfiles.filter(
+                (p) => !p.organization_id && p.user_id !== user?.id
+              );
+              const otherOrgUsers = allProfiles.filter(
+                (p) => p.organization_id && p.organization_id !== organizationId && p.user_id !== user?.id
+              );
+              const allOtherUsers = [...unassignedUsers, ...otherOrgUsers];
+
+              if (loadingAllProfiles) {
+                return (
+                  <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+                    <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                  </div>
+                );
+              }
+
+              if (allOtherUsers.length === 0) return null;
+
+              return (
+                <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+                  <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">All Other Users</h3>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">
+                    Unassigned users and users in other organizations. Assign them to your organization.
+                  </p>
+                  <div className="space-y-2">
+                    {allOtherUsers.map((profile) => {
+                      const currentOrgName = profile.organization_id
+                        ? organizationNameById[profile.organization_id] || "Other Org"
+                        : null;
+                      return (
+                        <motion.div key={profile.user_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl bg-muted/20 border border-border/50">
+                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-accent/10 flex items-center justify-center text-xs md:text-sm font-bold text-accent shrink-0">
+                            {(profile.full_name || "?")[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{profile.full_name || "Unknown"}</p>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                              currentOrgName
+                                ? "text-blue-400 bg-blue-400/10 border-blue-400/20"
+                                : "text-gray-400 bg-gray-400/10 border-gray-400/20"
+                            }`}>
+                              {currentOrgName || "Unassigned"}
+                            </span>
+                          </div>
+                          <motion.button whileTap={{ scale: 0.97 }}
+                            onClick={() => {
+                              if (organizationId) {
+                                assignMember.mutate({ orgId: organizationId, userId: profile.user_id, role: "viewer" });
+                              }
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-primary/15 text-primary text-[10px] md:text-xs font-semibold hover:bg-primary/25 transition-colors flex items-center gap-1">
+                            <Plus className="h-3 w-3" /> Assign
+                          </motion.button>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
           </TabsContent>
 
           {/* PERMISSIONS TAB */}
