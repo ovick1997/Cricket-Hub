@@ -628,20 +628,23 @@ const Settings = () => {
 
   const assignMember = useMutation({
     mutationFn: async ({ orgId, userId, role }: { orgId: string; userId: string; role: string }) => {
-      // Update profile to this org
-      const { error: profErr } = await supabase
-        .from("profiles")
-        .update({ organization_id: orgId, is_approved: true })
-        .eq("user_id", userId);
-      if (profErr) throw profErr;
-      // Upsert role
-      const { error: roleErr } = await supabase
-        .from("user_roles")
-        .upsert(
-          { user_id: userId, organization_id: orgId, role: role as any },
-          { onConflict: "user_id,role" }
-        );
-      if (roleErr) throw roleErr;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-assign-member`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ user_id: userId, organization_id: orgId, role }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to assign member");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["all-profiles"] });

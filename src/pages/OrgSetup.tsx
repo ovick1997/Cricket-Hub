@@ -8,11 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Loader2, Building2, UserPlus } from "lucide-react";
+import { Loader2, Building2, Clock } from "lucide-react";
 
 const OrgSetup = () => {
   const navigate = useNavigate();
-  const { user, organizationId, refetchProfile } = useAuth();
+  const { user, organizationId, signOut } = useAuth();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [orgName, setOrgName] = useState("");
@@ -76,33 +76,6 @@ const OrgSetup = () => {
     window.location.href = "/dashboard";
   };
 
-  // Subsequent users: join existing org as viewer (pending approval)
-  const handleJoinOrg = async () => {
-    if (!user || !existingOrg) return;
-    setLoading(true);
-
-    // Link profile to org (NOT approved - admin must approve)
-    const { error: profileError } = await supabase
-      .from("profiles")
-      .update({ organization_id: existingOrg.id, is_approved: false })
-      .eq("user_id", user.id);
-
-    if (profileError) {
-      toast.error("Failed to join organization: " + profileError.message);
-      setLoading(false);
-      return;
-    }
-
-    // Assign viewer role
-    await supabase
-      .from("user_roles")
-      .insert({ user_id: user.id, organization_id: existingOrg.id, role: "viewer" });
-
-    toast.success("Request sent! Waiting for admin approval.");
-    setLoading(false);
-    refetchProfile();
-  };
-
   if (checking) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -111,35 +84,30 @@ const OrgSetup = () => {
     );
   }
 
-  // If an org exists, show "Join" screen
+  // If an org exists, show "Waiting for assignment" screen
   if (existingOrg) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md"
+          className="max-w-sm text-center space-y-6"
         >
-          <div className="text-center mb-8">
-            <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
-              <UserPlus className="w-7 h-7 text-primary" />
-            </div>
-            <h1 className="text-2xl font-display font-bold text-foreground">Join Organization</h1>
-            <p className="text-sm text-muted-foreground mt-1">You'll be added as a viewer pending admin approval</p>
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-accent/10 border border-accent/20">
+            <Clock className="w-8 h-8 text-accent" />
           </div>
-
-          <Card className="border-border/50 bg-card/80 backdrop-blur-sm">
-            <CardHeader>
-              <CardTitle className="text-lg">{existingOrg.name}</CardTitle>
-              <CardDescription>Click below to request access to this organization</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button onClick={handleJoinOrg} className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <UserPlus className="w-4 h-4 mr-2" />}
-                Join as Viewer
-              </Button>
-            </CardContent>
-          </Card>
+          <div>
+            <h1 className="text-xl font-display font-bold text-foreground">Waiting for Assignment</h1>
+            <p className="text-sm text-muted-foreground mt-2">
+              Your account is ready. An admin will assign you to an organization. Please check back later.
+            </p>
+          </div>
+          <button
+            onClick={signOut}
+            className="px-6 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            Sign Out
+          </button>
         </motion.div>
       </div>
     );

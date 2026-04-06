@@ -26,12 +26,12 @@ export const ProtectedRoute = ({ children, requiredPermission }: ProtectedRouteP
     return <Navigate to="/auth" replace />;
   }
 
-  // Show pending approval screen
-  if (isApproved === false && location.pathname !== "/org-setup") {
+  // Show pending approval screen (user has org but not approved)
+  if (organizationId && isApproved === false && location.pathname !== "/org-setup") {
     return <PendingApproval />;
   }
 
-  // Redirect to org setup if no org (but don't loop if already there)
+  // No org assigned — show waiting for assignment (unless on org-setup for first user)
   if (!organizationId && location.pathname !== "/org-setup") {
     return <Navigate to="/org-setup" replace />;
   }
