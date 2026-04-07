@@ -61,6 +61,7 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Fetch all profiles
     const { data: profiles, error: profilesError } = await supabaseAdmin
       .from("profiles")
       .select("user_id, full_name, organization_id, is_approved")
@@ -73,7 +74,19 @@ Deno.serve(async (req) => {
       });
     }
 
-    return new Response(JSON.stringify({ users: profiles ?? [] }), {
+    // Fetch all user roles
+    const { data: roles, error: rolesError } = await supabaseAdmin
+      .from("user_roles")
+      .select("user_id, organization_id, role");
+
+    if (rolesError) {
+      return new Response(JSON.stringify({ error: rolesError.message }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify({ users: profiles ?? [], roles: roles ?? [] }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

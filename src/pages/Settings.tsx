@@ -25,6 +25,8 @@ import {
   Database,
   Calendar,
   FileJson,
+  UserCog,
+  UserMinus,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -62,6 +64,12 @@ type AssignableProfile = {
   full_name: string | null;
   organization_id: string | null;
   is_approved: boolean;
+};
+
+type UserRoleEntry = {
+  user_id: string;
+  organization_id: string;
+  role: string;
 };
 
 function ExportDataButton({ organizationId, orgName }: { organizationId: string; orgName: string }) {
@@ -456,8 +464,8 @@ const Settings = () => {
   const [newUserRole, setNewUserRole] = useState("viewer");
   const [creatingUser, setCreatingUser] = useState(false);
 
-  // All profiles (for assigning unassigned users to orgs)
-  const { data: allProfiles = [], isLoading: loadingAllProfiles } = useQuery<AssignableProfile[]>({
+  // All profiles + roles (for member management)
+  const { data: allProfilesData, isLoading: loadingAllProfiles } = useQuery<{ users: AssignableProfile[]; roles: UserRoleEntry[] }>({
     queryKey: ["all-profiles"],
     queryFn: async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -473,10 +481,17 @@ const Settings = () => {
 
       const result = await res.json();
       if (!res.ok) throw new Error(result.error || "Failed to load users");
-      return result.users ?? [];
+      return { users: result.users ?? [], roles: result.roles ?? [] };
     },
     enabled: isAdmin,
   });
+
+  const allProfiles = allProfilesData?.users ?? [];
+  const allUserRoles = allProfilesData?.roles ?? [];
+
+  // Member management state
+  const [memberMgmtOrgId, setMemberMgmtOrgId] = useState<string | null>(null);
+  const [removeFromOrgConfirm, setRemoveFromOrgConfirm] = useState<{ userId: string; name: string; orgId: string } | null>(null);
 
   const organizationNameById = useMemo(
     () => Object.fromEntries(allOrgs.map((org: any) => [org.id, org.name])),
@@ -658,7 +673,38 @@ const Settings = () => {
     onError: (err) => toast.error(err.message),
   });
 
-  // Delete organization
+  // Remove member from org (unassign, not delete)
+  const removeMemberFromOrg = useMutation({
+    mutationFn: async ({ userId }: { userId: string }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-assign-member`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+          },
+          body: JSON.stringify({ user_id: userId, remove: true }),
+        }
+      );
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || "Failed to remove member");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
+      queryClient.invalidateQueries({ queryKey: ["org-members"] });
+      queryClient.invalidateQueries({ queryKey: ["member-roles"] });
+      setRemoveFromOrgConfirm(null);
+      toast.success("Member removed from organization!");
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+
   const deleteOrg = useMutation({
     mutationFn: async (orgId: string) => {
       const { error } = await supabase.rpc("delete_organization_cascade", { _org_id: orgId });
@@ -722,6 +768,9 @@ const Settings = () => {
             </TabsTrigger>
             <TabsTrigger value="backup" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary gap-1 text-[10px] md:text-xs px-2 md:px-3 py-1.5">
               <Database className="h-3 w-3 md:h-3.5 md:w-3.5" /> Backup
+            </TabsTrigger>
+            <TabsTrigger value="member-mgmt" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary gap-1 text-[10px] md:text-xs px-2 md:px-3 py-1.5">
+              <UserCog className="h-3 w-3 md:h-3.5 md:w-3.5" /> Member Mgmt
             </TabsTrigger>
           </TabsList>
 
@@ -1108,6 +1157,211 @@ const Settings = () => {
               <div className="text-center py-8 text-sm text-muted-foreground">No organization found</div>
             )}
           </TabsContent>
+
+          {/* MEMBER MANAGEMENT TAB */}
+          <TabsContent value="member-mgmt" className="space-y-3 md:space-y-4">
+            {/* Section 1: Organization Members */}
+            <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Building2 className="h-4 w-4 text-primary" />
+                <h3 className="font-display font-bold text-foreground text-sm md:text-base">Organization Members</h3>
+              </div>
+              <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">Select an organization to view and manage its members</p>
+              
+              <Select value={memberMgmtOrgId || ""} onValueChange={(val) => setMemberMgmtOrgId(val)}>
+                <SelectTrigger className="bg-muted/40 border-border/60 mb-4"><SelectValue placeholder="Select organization..." /></SelectTrigger>
+                <SelectContent>
+                  {allOrgs.map((o: any) => (
+                    <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {memberMgmtOrgId && (() => {
+                const orgMembers = allProfiles.filter(p => p.organization_id === memberMgmtOrgId && p.is_approved);
+                const orgRoles = allUserRoles.filter(r => r.organization_id === memberMgmtOrgId);
+                
+                if (orgMembers.length === 0) {
+                  return <p className="text-sm text-muted-foreground text-center py-6">No members in this organization</p>;
+                }
+
+                return (
+                  <div className="space-y-2">
+                    {orgMembers.map((member) => {
+                      const role = orgRoles.find(r => r.user_id === member.user_id);
+                      const isSelf = member.user_id === user?.id;
+                      return (
+                        <motion.div key={member.user_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl bg-muted/20 border border-border/50">
+                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-primary/10 flex items-center justify-center text-xs md:text-sm font-bold text-primary shrink-0">
+                            {(member.full_name || "?")[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-semibold text-foreground truncate">{member.full_name || "Unknown"}</p>
+                              {isSelf && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold">You</span>}
+                            </div>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || "viewer"]}`}>
+                              {role?.role === "admin" && <Crown className="h-2.5 w-2.5 inline mr-0.5" />}
+                              {role?.role || "viewer"}
+                            </span>
+                          </div>
+                          {!isSelf && (
+                            <div className="flex items-center gap-2">
+                              <Select value={role?.role || "viewer"} onValueChange={(val) => {
+                                assignMember.mutate({ orgId: memberMgmtOrgId, userId: member.user_id, role: val });
+                              }}>
+                                <SelectTrigger className="h-8 w-[110px] text-xs bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="admin">Admin</SelectItem>
+                                  <SelectItem value="moderator">Moderator</SelectItem>
+                                  <SelectItem value="scorer">Scorer</SelectItem>
+                                  <SelectItem value="viewer">Viewer</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <motion.button whileTap={{ scale: 0.9 }}
+                                onClick={() => setRemoveFromOrgConfirm({ userId: member.user_id, name: member.full_name || "this member", orgId: memberMgmtOrgId })}
+                                className="h-8 px-2.5 rounded-lg flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                                <UserMinus className="h-3.5 w-3.5" /> Remove
+                              </motion.button>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Section 2: Unassigned Users */}
+            {(() => {
+              const unassigned = allProfiles.filter(p => !p.organization_id);
+              if (loadingAllProfiles) {
+                return (
+                  <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+                    <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+                  <div className="flex items-center gap-2 mb-1">
+                    <UserPlus className="h-4 w-4 text-accent" />
+                    <h3 className="font-display font-bold text-foreground text-sm md:text-base">Unassigned Users</h3>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-accent/10 text-accent font-bold">{unassigned.length}</span>
+                  </div>
+                  <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">Users not assigned to any organization. Assign them to an org with a role.</p>
+                  
+                  {unassigned.length === 0 ? (
+                    <div className="text-center py-6">
+                      <Check className="h-8 w-8 text-primary/40 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">All users are assigned</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {unassigned.map((profile) => (
+                        <motion.div key={profile.user_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl bg-muted/20 border border-border/50">
+                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-accent/10 flex items-center justify-center text-xs md:text-sm font-bold text-accent shrink-0">
+                            {(profile.full_name || "?")[0]?.toUpperCase()}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-foreground truncate">{profile.full_name || "Unknown"}</p>
+                            <span className="text-[10px] px-2 py-0.5 rounded-md border font-semibold text-muted-foreground bg-muted/10 border-border/40">Unassigned</span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <motion.button whileTap={{ scale: 0.97 }}
+                              onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
+                              className="px-3 py-1.5 rounded-lg bg-primary/15 text-primary text-[10px] md:text-xs font-semibold hover:bg-primary/25 transition-colors flex items-center gap-1">
+                              <Plus className="h-3 w-3" /> Assign
+                            </motion.button>
+                          </div>
+                        </motion.div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Section 3: All Users Overview */}
+            <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+              <div className="flex items-center gap-2 mb-1">
+                <Users className="h-4 w-4 text-primary" />
+                <h3 className="font-display font-bold text-foreground text-sm md:text-base">All Users Overview</h3>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold">{allProfiles.length}</span>
+              </div>
+              <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">Complete list of all users in the system</p>
+              
+              {loadingAllProfiles ? (
+                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-border/40">
+                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Name</th>
+                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Organization</th>
+                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Role</th>
+                        <th className="text-right py-2 px-2 text-muted-foreground font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {allProfiles.map((profile) => {
+                        const role = allUserRoles.find(r => r.user_id === profile.user_id);
+                        const orgName = profile.organization_id ? organizationNameById[profile.organization_id] || "Unknown Org" : null;
+                        const isSelf = profile.user_id === user?.id;
+                        return (
+                          <tr key={profile.user_id} className="border-b border-border/20 hover:bg-muted/10 transition-colors">
+                            <td className="py-2 px-2">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-foreground">{profile.full_name || "Unknown"}</span>
+                                {isSelf && <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold">You</span>}
+                              </div>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                                orgName
+                                  ? "text-blue-400 bg-blue-400/10 border-blue-400/20"
+                                  : "text-muted-foreground bg-muted/10 border-border/40"
+                              }`}>
+                                {orgName || "Unassigned"}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2">
+                              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || ""] || "text-muted-foreground bg-muted/10 border-border/40"}`}>
+                                {role?.role || "—"}
+                              </span>
+                            </td>
+                            <td className="py-2 px-2 text-right">
+                              {!isSelf && (
+                                <div className="flex items-center justify-end gap-1">
+                                  {!profile.organization_id ? (
+                                    <motion.button whileTap={{ scale: 0.97 }}
+                                      onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
+                                      className="px-2 py-1 rounded-md bg-primary/15 text-primary text-[10px] font-semibold hover:bg-primary/25 transition-colors">
+                                      Assign
+                                    </motion.button>
+                                  ) : (
+                                    <motion.button whileTap={{ scale: 0.97 }}
+                                      onClick={() => setRemoveFromOrgConfirm({ userId: profile.user_id, name: profile.full_name || "this user", orgId: profile.organization_id! })}
+                                      className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors">
+                                      Remove
+                                    </motion.button>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
 
@@ -1146,50 +1400,67 @@ const Settings = () => {
       </Dialog>
 
       {/* Assign Member to Org Dialog */}
-      <Dialog open={!!assignMemberOrgId} onOpenChange={(open) => { if (!open) setAssignMemberOrgId(null); }}>
+      <Dialog open={!!assignMemberOrgId} onOpenChange={(open) => { if (!open) { setAssignMemberOrgId(null); setAssignUserId(""); } }}>
         <DialogContent className="sm:max-w-sm bg-card border-border/60">
           <DialogHeader><DialogTitle className="font-display">Assign Member</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">Select User</Label>
-              <Select value={assignUserId} onValueChange={setAssignUserId}>
-                <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue placeholder="Choose a user" /></SelectTrigger>
-                <SelectContent>
-                  {loadingAllProfiles ? (
-                    <div className="px-2 py-3 text-xs text-muted-foreground">Loading users...</div>
-                  ) : assignableProfiles.length > 0 ? (
-                    assignableProfiles.map((p) => (
-                      <SelectItem key={p.user_id} value={p.user_id}>
-                        {p.full_name || `User ${p.user_id.slice(0, 8)}`}
-                        {p.organization_id
-                          ? ` • ${organizationNameById[p.organization_id] || "Assigned"}`
-                          : " • Unassigned"}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="px-2 py-3 text-xs text-muted-foreground">No eligible users found</div>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs font-semibold text-muted-foreground">Role</Label>
-              <Select value={assignRole} onValueChange={setAssignRole}>
-                <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="moderator">Moderator</SelectItem>
-                  <SelectItem value="scorer">Scorer</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {assignMemberOrgId === "pick" && (
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold text-muted-foreground">Select Organization</Label>
+                <Select value="" onValueChange={(val) => setAssignMemberOrgId(val)}>
+                  <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue placeholder="Choose an organization" /></SelectTrigger>
+                  <SelectContent>
+                    {allOrgs.map((o: any) => (
+                      <SelectItem key={o.id} value={o.id}>{o.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {assignMemberOrgId !== "pick" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground">Select User</Label>
+                  <Select value={assignUserId} onValueChange={setAssignUserId}>
+                    <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue placeholder="Choose a user" /></SelectTrigger>
+                    <SelectContent>
+                      {loadingAllProfiles ? (
+                        <div className="px-2 py-3 text-xs text-muted-foreground">Loading users...</div>
+                      ) : assignableProfiles.length > 0 ? (
+                        assignableProfiles.map((p) => (
+                          <SelectItem key={p.user_id} value={p.user_id}>
+                            {p.full_name || `User ${p.user_id.slice(0, 8)}`}
+                            {p.organization_id
+                              ? ` • ${organizationNameById[p.organization_id] || "Assigned"}`
+                              : " • Unassigned"}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <div className="px-2 py-3 text-xs text-muted-foreground">No eligible users found</div>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-muted-foreground">Role</Label>
+                  <Select value={assignRole} onValueChange={setAssignRole}>
+                    <SelectTrigger className="bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      <SelectItem value="moderator">Moderator</SelectItem>
+                      <SelectItem value="scorer">Scorer</SelectItem>
+                      <SelectItem value="viewer">Viewer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
             <div className="flex gap-2">
-              <button type="button" onClick={() => setAssignMemberOrgId(null)} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors">Cancel</button>
+              <button type="button" onClick={() => { setAssignMemberOrgId(null); setAssignUserId(""); }} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors">Cancel</button>
               <motion.button whileTap={{ scale: 0.97 }}
-                disabled={!assignUserId}
+                disabled={!assignUserId || assignMemberOrgId === "pick"}
                 onClick={() => {
-                  if (assignMemberOrgId && assignUserId) {
+                  if (assignMemberOrgId && assignMemberOrgId !== "pick" && assignUserId) {
                     assignMember.mutate({ orgId: assignMemberOrgId, userId: assignUserId, role: assignRole });
                   }
                 }}
@@ -1334,6 +1605,32 @@ const Settings = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Remove from Org Confirmation */}
+      <AlertDialog open={!!removeFromOrgConfirm} onOpenChange={(open) => { if (!open) setRemoveFromOrgConfirm(null); }}>
+        <AlertDialogContent className="bg-card border-border/60">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display">Remove from Organization</AlertDialogTitle>
+            <AlertDialogDescription>
+              Remove <strong className="text-foreground">{removeFromOrgConfirm?.name}</strong> from their organization? They will become unassigned and lose their role. Their account will NOT be deleted.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (removeFromOrgConfirm) {
+                  removeMemberFromOrg.mutate({ userId: removeFromOrgConfirm.userId });
+                }
+              }}
+              className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {removeMemberFromOrg.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
+              Remove from Org
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 };
