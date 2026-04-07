@@ -73,17 +73,35 @@ export function DashboardLayout({ children, onRefresh }: { children: React.React
 
         <div className="flex-1 flex flex-col min-w-0">
           {/* Header */}
-          <header className="h-12 md:h-14 flex items-center justify-between border-b border-border/60 px-3 md:px-6 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
-            <div className="flex items-center gap-2 md:gap-3">
+          <header className="h-12 md:h-14 flex items-center justify-between border-b border-border/60 px-2 md:px-6 bg-background/80 backdrop-blur-xl sticky top-0 z-30">
+            <div className="flex items-center gap-1.5 md:gap-3 min-w-0 flex-1">
               <SidebarTrigger className="hidden md:flex text-muted-foreground hover:text-foreground transition-colors" />
               <div className="hidden md:block h-5 w-px bg-border/60" />
               {/* Mobile: logo */}
-              <div className="md:hidden flex items-center gap-2">
-                <div className="h-7 w-7 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
-                  <span className="text-primary-foreground font-display font-bold text-xs">C</span>
+              <div className="md:hidden flex items-center gap-1.5 shrink-0">
+                <div className="h-6 w-6 rounded-lg bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center">
+                  <span className="text-primary-foreground font-display font-bold text-[10px]">C</span>
                 </div>
-                <span className="font-display font-bold text-sm text-foreground">CricketHub</span>
+                <span className="font-display font-bold text-xs text-foreground">CricketHub</span>
               </div>
+              {/* Mobile: org switcher inline */}
+              {isAdmin && allOrganizations.length > 1 && (
+                <div className="md:hidden min-w-0">
+                  <Select value={activeOrganizationId ?? ""} onValueChange={setActiveOrganizationId}>
+                    <SelectTrigger className="w-auto max-w-[120px] h-7 text-[10px] bg-muted/40 border-border/60 rounded-lg gap-1 px-1.5">
+                      <Building2 className="h-3 w-3 text-primary shrink-0" />
+                      <SelectValue placeholder="Org" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allOrganizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id} className="text-xs">
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <div className="relative hidden md:block">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                 <input
@@ -94,21 +112,23 @@ export function DashboardLayout({ children, onRefresh }: { children: React.React
               </div>
             </div>
             {/* Admin org switcher */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
               {isAdmin && allOrganizations.length > 1 && (
-                <Select value={activeOrganizationId ?? ""} onValueChange={setActiveOrganizationId}>
-                  <SelectTrigger className="w-auto min-w-[140px] max-w-[200px] h-8 text-xs bg-muted/40 border-border/60 rounded-xl gap-1.5">
-                    <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                    <SelectValue placeholder="Select org" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {allOrganizations.map((org) => (
-                      <SelectItem key={org.id} value={org.id} className="text-xs">
-                        {org.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="hidden md:block">
+                  <Select value={activeOrganizationId ?? ""} onValueChange={setActiveOrganizationId}>
+                    <SelectTrigger className="w-auto min-w-[140px] max-w-[200px] h-8 text-xs bg-muted/40 border-border/60 rounded-xl gap-1.5">
+                      <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                      <SelectValue placeholder="Select org" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allOrganizations.map((org) => (
+                        <SelectItem key={org.id} value={org.id} className="text-xs">
+                          {org.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
               <NotificationBell />
               <div className="h-5 w-px bg-border/60 hidden sm:block" />
