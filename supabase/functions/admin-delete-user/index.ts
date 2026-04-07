@@ -78,26 +78,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify target user belongs to same org
-    const { data: targetProfile } = await supabaseAdmin
-      .from("profiles")
-      .select("organization_id")
-      .eq("user_id", user_id)
-      .single();
-
-    if (!targetProfile || targetProfile.organization_id !== callerProfile.organization_id) {
-      return new Response(JSON.stringify({ error: "User not in your organization" }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // Delete user roles
+    // Delete ALL roles for this user (across all orgs)
     await supabaseAdmin
       .from("user_roles")
       .delete()
-      .eq("user_id", user_id)
-      .eq("organization_id", callerProfile.organization_id);
+      .eq("user_id", user_id);
 
     // Delete profile
     await supabaseAdmin
