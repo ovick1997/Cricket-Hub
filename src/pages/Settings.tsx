@@ -572,6 +572,7 @@ const Settings = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["org-members"] });
       queryClient.invalidateQueries({ queryKey: ["member-roles"] });
+      queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
       toast.success("User deleted permanently");
       setDeletingUser(false);
     },
@@ -757,9 +758,6 @@ const Settings = () => {
                 </span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="members" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary gap-1 text-[10px] md:text-xs px-2 md:px-3 py-1.5">
-              <Users className="h-3 w-3 md:h-3.5 md:w-3.5" /> Members
-            </TabsTrigger>
             <TabsTrigger value="permissions" className="data-[state=active]:bg-primary/15 data-[state=active]:text-primary gap-1 text-[10px] md:text-xs px-2 md:px-3 py-1.5">
               <ToggleLeft className="h-3 w-3 md:h-3.5 md:w-3.5" /> Permissions
             </TabsTrigger>
@@ -817,135 +815,6 @@ const Settings = () => {
             </div>
           </TabsContent>
 
-          {/* MEMBERS TAB */}
-          <TabsContent value="members" className="space-y-3 md:space-y-4">
-            {/* Current Org Members */}
-            <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
-              <div className="flex items-center justify-between mb-3 md:mb-4">
-                <div>
-                  <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">Organization Members</h3>
-                  <p className="text-[10px] md:text-xs text-muted-foreground">Manage roles and permissions for your team</p>
-                </div>
-                <motion.button whileTap={{ scale: 0.97 }}
-                  onClick={() => setCreateUserOpen(true)}
-                  className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] md:text-xs font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
-                  <UserPlus className="h-3 w-3 md:h-3.5 md:w-3.5" /> Create User
-                </motion.button>
-              </div>
-              {loadingMembers ? (
-                <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-              ) : members.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">No members yet</p>
-              ) : (
-                <div className="space-y-2">
-                  {members.map((member: any) => {
-                    const role = memberRoles.find((r: any) => r.user_id === member.user_id);
-                    const isSelf = member.user_id === user?.id;
-                    return (
-                      <motion.div key={member.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl bg-muted/20 border border-border/50">
-                        <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-primary/10 flex items-center justify-center text-xs md:text-sm font-bold text-primary shrink-0">
-                          {(member.full_name || "?")[0]?.toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-semibold text-foreground truncate">{member.full_name || "Unknown"}</p>
-                            {isSelf && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/10 text-primary font-bold">You</span>}
-                          </div>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || "viewer"]}`}>
-                            {role?.role === "admin" && <Crown className="h-2.5 w-2.5 inline mr-0.5" />}
-                            {role?.role || "viewer"}
-                          </span>
-                        </div>
-                        {!isSelf && (
-                          <div className="flex items-center gap-2">
-                            <Select value={role?.role || "viewer"} onValueChange={(val) => changeRole.mutate({ userId: member.user_id, newRole: val })}>
-                              <SelectTrigger className="h-8 w-[110px] text-xs bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="admin">Admin</SelectItem>
-                                <SelectItem value="moderator">Moderator</SelectItem>
-                                <SelectItem value="scorer">Scorer</SelectItem>
-                                <SelectItem value="viewer">Viewer</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <motion.button whileTap={{ scale: 0.9 }}
-                              onClick={() => setRemoveConfirm({ id: member.id, userId: member.user_id, name: member.full_name || "this member" })}
-                              className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </motion.button>
-                          </div>
-                        )}
-                      </motion.div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Unassigned / Other Org Users */}
-            {(() => {
-              const unassignedUsers = allProfiles.filter(
-                (p) => !p.organization_id && p.user_id !== user?.id
-              );
-              const otherOrgUsers = allProfiles.filter(
-                (p) => p.organization_id && p.organization_id !== organizationId && p.user_id !== user?.id
-              );
-              const allOtherUsers = [...unassignedUsers, ...otherOrgUsers];
-
-              if (loadingAllProfiles) {
-                return (
-                  <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
-                    <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
-                  </div>
-                );
-              }
-
-              if (allOtherUsers.length === 0) return null;
-
-              return (
-                <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
-                  <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">All Other Users</h3>
-                  <p className="text-[10px] md:text-xs text-muted-foreground mb-3 md:mb-4">
-                    Unassigned users and users in other organizations. Assign them to your organization.
-                  </p>
-                  <div className="space-y-2">
-                    {allOtherUsers.map((profile) => {
-                      const currentOrgName = profile.organization_id
-                        ? organizationNameById[profile.organization_id] || "Other Org"
-                        : null;
-                      return (
-                        <motion.div key={profile.user_id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                          className="flex items-center gap-2 md:gap-3 p-2.5 md:p-3 rounded-lg md:rounded-xl bg-muted/20 border border-border/50">
-                          <div className="h-8 w-8 md:h-10 md:w-10 rounded-lg md:rounded-xl bg-accent/10 flex items-center justify-center text-xs md:text-sm font-bold text-accent shrink-0">
-                            {(profile.full_name || "?")[0]?.toUpperCase()}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-foreground truncate">{profile.full_name || "Unknown"}</p>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
-                              currentOrgName
-                                ? "text-blue-400 bg-blue-400/10 border-blue-400/20"
-                                : "text-gray-400 bg-gray-400/10 border-gray-400/20"
-                            }`}>
-                              {currentOrgName || "Unassigned"}
-                            </span>
-                          </div>
-                          <motion.button whileTap={{ scale: 0.97 }}
-                            onClick={() => {
-                              if (organizationId) {
-                                assignMember.mutate({ orgId: organizationId, userId: profile.user_id, role: "viewer" });
-                              }
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-primary/15 text-primary text-[10px] md:text-xs font-semibold hover:bg-primary/25 transition-colors flex items-center gap-1">
-                            <Plus className="h-3 w-3" /> Assign
-                          </motion.button>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-          </TabsContent>
 
           {/* PERMISSIONS TAB */}
           <TabsContent value="permissions" className="space-y-3 md:space-y-4">
@@ -1160,6 +1029,19 @@ const Settings = () => {
 
           {/* MEMBER MANAGEMENT TAB */}
           <TabsContent value="member-mgmt" className="space-y-3 md:space-y-4">
+            {/* Header with Create User */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display font-bold text-foreground text-sm md:text-base">Member Management</h3>
+                <p className="text-[10px] md:text-xs text-muted-foreground">Create users, assign to organizations, manage roles, or delete accounts</p>
+              </div>
+              <motion.button whileTap={{ scale: 0.97 }}
+                onClick={() => setCreateUserOpen(true)}
+                className="flex items-center gap-1.5 px-3 md:px-4 py-2 rounded-xl bg-primary text-primary-foreground text-[10px] md:text-xs font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+                <UserPlus className="h-3 w-3 md:h-3.5 md:w-3.5" /> Create User
+              </motion.button>
+            </div>
+
             {/* Section 1: Organization Members */}
             <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
               <div className="flex items-center gap-2 mb-1">
@@ -1224,6 +1106,12 @@ const Settings = () => {
                                 className="h-8 px-2.5 rounded-lg flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
                                 <UserMinus className="h-3.5 w-3.5" /> Remove
                               </motion.button>
+                              <motion.button whileTap={{ scale: 0.9 }}
+                                onClick={() => setRemoveConfirm({ id: member.user_id, userId: member.user_id, name: member.full_name || "this member" })}
+                                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title="Delete user permanently">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </motion.button>
                             </div>
                           )}
                         </motion.div>
@@ -1275,6 +1163,12 @@ const Settings = () => {
                               onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
                               className="px-3 py-1.5 rounded-lg bg-primary/15 text-primary text-[10px] md:text-xs font-semibold hover:bg-primary/25 transition-colors flex items-center gap-1">
                               <Plus className="h-3 w-3" /> Assign
+                            </motion.button>
+                            <motion.button whileTap={{ scale: 0.9 }}
+                              onClick={() => setRemoveConfirm({ id: profile.user_id, userId: profile.user_id, name: profile.full_name || "this user" })}
+                              className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                              title="Delete user permanently">
+                              <Trash2 className="h-3.5 w-3.5" />
                             </motion.button>
                           </div>
                         </motion.div>
@@ -1350,6 +1244,12 @@ const Settings = () => {
                                       Remove
                                     </motion.button>
                                   )}
+                                  <motion.button whileTap={{ scale: 0.9 }}
+                                    onClick={() => setRemoveConfirm({ id: profile.user_id, userId: profile.user_id, name: profile.full_name || "this user" })}
+                                    className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors"
+                                    title="Delete permanently">
+                                    <Trash2 className="h-3 w-3" />
+                                  </motion.button>
                                 </div>
                               )}
                             </td>
