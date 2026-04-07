@@ -950,16 +950,16 @@ const Settings = () => {
             )}
 
             {/* All Organizations */}
-            <div className="rounded-2xl border border-border bg-card p-5">
-              <div className="flex items-center justify-between mb-4">
+            <div className="rounded-xl md:rounded-2xl border border-border bg-card p-3 md:p-5">
+              <div className="flex items-center justify-between mb-3 md:mb-4">
                 <div>
-                  <h3 className="font-display font-bold text-foreground mb-1">All Organizations</h3>
-                  <p className="text-xs text-muted-foreground">Create and manage organizations</p>
+                  <h3 className="font-display font-bold text-foreground text-sm md:text-base mb-0.5">All Organizations</h3>
+                  <p className="text-[10px] md:text-xs text-muted-foreground">Create and manage organizations</p>
                 </div>
                 <motion.button whileTap={{ scale: 0.97 }}
                   onClick={() => { setCreatingOrg(true); setNewOrgName(""); }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
-                  <Plus className="h-3.5 w-3.5" /> New Organization
+                  className="flex items-center gap-1 md:gap-1.5 px-2.5 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl bg-primary text-primary-foreground text-[10px] md:text-xs font-semibold hover:bg-primary/90 transition-colors shadow-lg shadow-primary/20">
+                  <Plus className="h-3 w-3 md:h-3.5 md:w-3.5" /> New Organization
                 </motion.button>
               </div>
 
@@ -969,38 +969,40 @@ const Settings = () => {
                   const isCurrent = o.id === organizationId;
                   return (
                     <motion.div key={o.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-colors ${isCurrent ? "bg-primary/5 border-primary/20" : "bg-muted/20 border-border/50"}`}>
-                      <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center text-sm font-display font-bold text-primary shrink-0">
-                        {o.name[0]?.toUpperCase()}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-foreground truncate">{o.name}</p>
-                          {isCurrent && <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-bold">Active</span>}
+                      className={`p-2.5 md:p-3 rounded-lg md:rounded-xl border transition-colors ${isCurrent ? "bg-primary/5 border-primary/20" : "bg-muted/20 border-border/50"}`}>
+                      <div className="flex items-center gap-2 md:gap-3">
+                        <div className="h-9 w-9 md:h-11 md:w-11 rounded-lg md:rounded-xl bg-primary/10 flex items-center justify-center text-xs md:text-sm font-display font-bold text-primary shrink-0">
+                          {o.name[0]?.toUpperCase()}
                         </div>
-                        <p className="text-[10px] text-muted-foreground">{orgMembers.length} members • {o.slug}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-xs md:text-sm font-semibold text-foreground truncate">{o.name}</p>
+                            {isCurrent && <span className="text-[8px] md:text-[9px] px-1 md:px-1.5 py-0.5 rounded-md bg-primary/15 text-primary font-bold shrink-0">Active</span>}
+                          </div>
+                          <p className="text-[9px] md:text-[10px] text-muted-foreground">{orgMembers.length} members • {o.slug}</p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1 mt-2 ml-11 md:ml-14">
                         <motion.button whileTap={{ scale: 0.9 }}
                           onClick={() => { setAssignMemberOrgId(o.id); setAssignUserId(""); }}
-                          className="h-8 px-2.5 rounded-lg bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors flex items-center gap-1">
-                          <UserPlus className="h-3 w-3" /> Assign
+                          className="h-7 md:h-8 px-2 md:px-2.5 rounded-lg bg-accent/10 text-accent text-[10px] md:text-xs font-semibold hover:bg-accent/20 transition-colors flex items-center gap-1">
+                          <UserPlus className="h-2.5 w-2.5 md:h-3 md:w-3" /> Assign
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
                           onClick={() => { setResetOrgConfirm({ id: o.id, name: o.name }); setResetOrgInput(""); setSelectiveResetOptions({ matches: false, tournaments: false, teams: false, playerStats: false, players: false, notifications: false }); }}
-                          className="h-8 px-2.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs font-semibold hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                          className="h-7 md:h-8 px-2 md:px-2.5 rounded-lg bg-amber-500/10 text-amber-500 text-[10px] md:text-xs font-semibold hover:bg-amber-500/20 transition-colors flex items-center gap-1"
                           title="Selectively reset organization data">
-                          <RotateCcw className="h-3 w-3" /> Reset
+                          <RotateCcw className="h-2.5 w-2.5 md:h-3 md:w-3" /> Reset
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
                           onClick={() => { setOrgName(o.name); setEditingOrgId(o.id); setEditingOrg(true); }}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
-                          <Pencil className="h-3.5 w-3.5" />
+                          className="h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors">
+                          <Pencil className="h-3 w-3 md:h-3.5 md:w-3.5" />
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
                           onClick={() => { setDeleteOrgConfirm({ id: o.id, name: o.name }); setDeleteOrgInput(""); }}
-                          className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                          <Trash2 className="h-3.5 w-3.5" />
+                          className="h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                          <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
                         </motion.button>
                       </div>
                     </motion.div>
@@ -1081,11 +1083,11 @@ const Settings = () => {
                             </span>
                           </div>
                           {!isSelf && (
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-1 md:gap-2 flex-wrap justify-end">
                               <Select value={role?.role || "viewer"} onValueChange={(val) => {
                                 assignMember.mutate({ orgId: memberMgmtOrgId, userId: member.user_id, role: val });
                               }}>
-                                <SelectTrigger className="h-8 w-[110px] text-xs bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="h-7 md:h-8 w-[90px] md:w-[110px] text-[10px] md:text-xs bg-muted/40 border-border/60"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="admin">Admin</SelectItem>
                                   <SelectItem value="moderator">Moderator</SelectItem>
@@ -1095,14 +1097,14 @@ const Settings = () => {
                               </Select>
                               <motion.button whileTap={{ scale: 0.9 }}
                                 onClick={() => setRemoveFromOrgConfirm({ userId: member.user_id, name: member.full_name || "this member", orgId: memberMgmtOrgId })}
-                                className="h-8 px-2.5 rounded-lg flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
-                                <UserMinus className="h-3.5 w-3.5" /> Remove
+                                className="h-7 md:h-8 px-1.5 md:px-2.5 rounded-lg flex items-center gap-1 text-[10px] md:text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors">
+                                <UserMinus className="h-3 w-3 md:h-3.5 md:w-3.5" /> <span className="hidden md:inline">Remove</span>
                               </motion.button>
                               <motion.button whileTap={{ scale: 0.9 }}
                                 onClick={() => setRemoveConfirm({ id: member.user_id, userId: member.user_id, name: member.full_name || "this member" })}
-                                className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                className="h-7 w-7 md:h-8 md:w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                                 title="Delete user permanently">
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5" />
                               </motion.button>
                             </div>
                           )}
@@ -1183,74 +1185,134 @@ const Settings = () => {
               {loadingAllProfiles ? (
                 <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-border/40">
-                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Name</th>
-                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Organization</th>
-                        <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Role</th>
-                        <th className="text-right py-2 px-2 text-muted-foreground font-semibold">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {allProfiles.map((profile) => {
-                        const role = allUserRoles.find(r => r.user_id === profile.user_id);
-                        const orgName = profile.organization_id ? organizationNameById[profile.organization_id] || "Unknown Org" : null;
-                        const isSelf = profile.user_id === user?.id;
-                        return (
-                          <tr key={profile.user_id} className="border-b border-border/20 hover:bg-muted/10 transition-colors">
-                            <td className="py-2 px-2">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-foreground">{profile.full_name || "Unknown"}</span>
-                                {isSelf && <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold">You</span>}
-                              </div>
-                            </td>
-                            <td className="py-2 px-2">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
-                                orgName
-                                  ? "text-blue-400 bg-blue-400/10 border-blue-400/20"
-                                  : "text-muted-foreground bg-muted/10 border-border/40"
-                              }`}>
-                                {orgName || "Unassigned"}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2">
-                              <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || ""] || "text-muted-foreground bg-muted/10 border-border/40"}`}>
-                                {role?.role || "—"}
-                              </span>
-                            </td>
-                            <td className="py-2 px-2 text-right">
-                              {!isSelf && (
-                                <div className="flex items-center justify-end gap-1">
-                                  {!profile.organization_id ? (
-                                    <motion.button whileTap={{ scale: 0.97 }}
-                                      onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
-                                      className="px-2 py-1 rounded-md bg-primary/15 text-primary text-[10px] font-semibold hover:bg-primary/25 transition-colors">
-                                      Assign
-                                    </motion.button>
-                                  ) : (
-                                    <motion.button whileTap={{ scale: 0.97 }}
-                                      onClick={() => setRemoveFromOrgConfirm({ userId: profile.user_id, name: profile.full_name || "this user", orgId: profile.organization_id! })}
-                                      className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors">
-                                      Remove
-                                    </motion.button>
-                                  )}
-                                  <motion.button whileTap={{ scale: 0.9 }}
-                                    onClick={() => setRemoveConfirm({ id: profile.user_id, userId: profile.user_id, name: profile.full_name || "this user" })}
-                                    className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors"
-                                    title="Delete permanently">
-                                    <Trash2 className="h-3 w-3" />
-                                  </motion.button>
+                <>
+                  {/* Desktop table */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="border-b border-border/40">
+                          <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Name</th>
+                          <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Organization</th>
+                          <th className="text-left py-2 px-2 text-muted-foreground font-semibold">Role</th>
+                          <th className="text-right py-2 px-2 text-muted-foreground font-semibold">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {allProfiles.map((profile) => {
+                          const role = allUserRoles.find(r => r.user_id === profile.user_id);
+                          const orgName = profile.organization_id ? organizationNameById[profile.organization_id] || "Unknown Org" : null;
+                          const isSelf = profile.user_id === user?.id;
+                          return (
+                            <tr key={profile.user_id} className="border-b border-border/20 hover:bg-muted/10 transition-colors">
+                              <td className="py-2 px-2">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-foreground">{profile.full_name || "Unknown"}</span>
+                                  {isSelf && <span className="text-[8px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold">You</span>}
                                 </div>
+                              </td>
+                              <td className="py-2 px-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold ${
+                                  orgName
+                                    ? "text-blue-400 bg-blue-400/10 border-blue-400/20"
+                                    : "text-muted-foreground bg-muted/10 border-border/40"
+                                }`}>
+                                  {orgName || "Unassigned"}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2">
+                                <span className={`text-[10px] px-2 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || ""] || "text-muted-foreground bg-muted/10 border-border/40"}`}>
+                                  {role?.role || "—"}
+                                </span>
+                              </td>
+                              <td className="py-2 px-2 text-right">
+                                {!isSelf && (
+                                  <div className="flex items-center justify-end gap-1">
+                                    {!profile.organization_id ? (
+                                      <motion.button whileTap={{ scale: 0.97 }}
+                                        onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
+                                        className="px-2 py-1 rounded-md bg-primary/15 text-primary text-[10px] font-semibold hover:bg-primary/25 transition-colors">
+                                        Assign
+                                      </motion.button>
+                                    ) : (
+                                      <motion.button whileTap={{ scale: 0.97 }}
+                                        onClick={() => setRemoveFromOrgConfirm({ userId: profile.user_id, name: profile.full_name || "this user", orgId: profile.organization_id! })}
+                                        className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors">
+                                        Remove
+                                      </motion.button>
+                                    )}
+                                    <motion.button whileTap={{ scale: 0.9 }}
+                                      onClick={() => setRemoveConfirm({ id: profile.user_id, userId: profile.user_id, name: profile.full_name || "this user" })}
+                                      className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[10px] font-semibold hover:bg-destructive/20 transition-colors"
+                                      title="Delete permanently">
+                                      <Trash2 className="h-3 w-3" />
+                                    </motion.button>
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile card layout */}
+                  <div className="md:hidden space-y-2">
+                    {allProfiles.map((profile) => {
+                      const role = allUserRoles.find(r => r.user_id === profile.user_id);
+                      const orgName = profile.organization_id ? organizationNameById[profile.organization_id] || "Unknown Org" : null;
+                      const isSelf = profile.user_id === user?.id;
+                      return (
+                        <div key={profile.user_id} className="p-2.5 rounded-lg bg-muted/20 border border-border/50">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                              {(profile.full_name || "?")[0]?.toUpperCase()}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <p className="text-xs font-semibold text-foreground truncate">{profile.full_name || "Unknown"}</p>
+                                {isSelf && <span className="text-[7px] px-1 py-0.5 rounded bg-primary/10 text-primary font-bold shrink-0">You</span>}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 ml-9 mb-1.5">
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-semibold ${
+                              orgName ? "text-blue-400 bg-blue-400/10 border-blue-400/20" : "text-muted-foreground bg-muted/10 border-border/40"
+                            }`}>
+                              {orgName || "Unassigned"}
+                            </span>
+                            <span className={`text-[9px] px-1.5 py-0.5 rounded-md border font-semibold capitalize ${roleColors[role?.role || ""] || "text-muted-foreground bg-muted/10 border-border/40"}`}>
+                              {role?.role || "—"}
+                            </span>
+                          </div>
+                          {!isSelf && (
+                            <div className="flex items-center gap-1 ml-9">
+                              {!profile.organization_id ? (
+                                <motion.button whileTap={{ scale: 0.97 }}
+                                  onClick={() => { setAssignMemberOrgId("pick"); setAssignUserId(profile.user_id); }}
+                                  className="px-2 py-1 rounded-md bg-primary/15 text-primary text-[9px] font-semibold hover:bg-primary/25 transition-colors">
+                                  Assign
+                                </motion.button>
+                              ) : (
+                                <motion.button whileTap={{ scale: 0.97 }}
+                                  onClick={() => setRemoveFromOrgConfirm({ userId: profile.user_id, name: profile.full_name || "this user", orgId: profile.organization_id! })}
+                                  className="px-2 py-1 rounded-md bg-destructive/10 text-destructive text-[9px] font-semibold hover:bg-destructive/20 transition-colors">
+                                  Remove
+                                </motion.button>
                               )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                              <motion.button whileTap={{ scale: 0.9 }}
+                                onClick={() => setRemoveConfirm({ id: profile.user_id, userId: profile.user_id, name: profile.full_name || "this user" })}
+                                className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                title="Delete permanently">
+                                <Trash2 className="h-2.5 w-2.5" />
+                              </motion.button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           </TabsContent>
