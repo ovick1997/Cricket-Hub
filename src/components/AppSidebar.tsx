@@ -13,11 +13,13 @@ import {
   History,
   BookOpen,
   KeyRound,
+  Building2,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions, type PermissionKey } from "@/hooks/usePermissions";
+import { Badge } from "@/components/ui/badge";
 import {
   Sidebar,
   SidebarContent,
@@ -48,8 +50,9 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, isAdmin, allOrganizations, activeOrganizationId } = useAuth();
   const { hasPermission } = usePermissions();
+  const activeOrg = allOrganizations.find(org => org.id === activeOrganizationId);
   const isActive = (path: string) =>
     path === "/dashboard" ? location.pathname === "/dashboard" : location.pathname.startsWith(path);
 
@@ -74,6 +77,20 @@ export function AppSidebar() {
             </div>
           )}
         </div>
+        {isAdmin && activeOrg && (
+          <div className={`mt-2 ${collapsed ? "flex justify-center" : "px-1"}`}>
+            {collapsed ? (
+              <div className="h-6 w-6 rounded-md bg-primary/15 flex items-center justify-center" title={activeOrg.name}>
+                <Building2 className="h-3 w-3 text-primary" />
+              </div>
+            ) : (
+              <Badge variant="secondary" className="w-full justify-start gap-1.5 rounded-lg bg-primary/10 text-primary border-primary/20 text-[10px] font-medium px-2 py-1 truncate">
+                <Building2 className="h-3 w-3 shrink-0" />
+                <span className="truncate">{activeOrg.name}</span>
+              </Badge>
+            )}
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="pt-2">
