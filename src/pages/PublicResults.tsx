@@ -15,7 +15,7 @@ const PublicResults = () => {
       .from("match_summaries")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(10);
+      .limit(20);
     setMatches(data || []);
     setLoading(false);
   }, []);

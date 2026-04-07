@@ -24,7 +24,7 @@ const PublicHome = () => {
         .select("id, venue, match_date, overs, status, result, team1:teams!matches_team1_id_fkey(name, short_name, color), team2:teams!matches_team2_id_fkey(name, short_name, color)")
         .eq("status", "completed")
         .order("updated_at", { ascending: false })
-        .limit(4),
+        .limit(20),
     ]);
     setLiveMatches(liveRes.data || []);
     setRecentMatches(recentRes.data || []);

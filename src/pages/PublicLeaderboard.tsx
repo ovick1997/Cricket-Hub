@@ -6,6 +6,7 @@ import { Trophy, Target, TrendingUp, Star, Loader2, Crown, Medal, Award } from "
 import { motion, AnimatePresence } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating } from "@/lib/ranking-utils";
 
 interface PlayerStat {
   id: string;
@@ -30,29 +31,8 @@ interface PlayerStat {
   fifties: number;
   hundreds: number;
   five_wickets: number;
-  player?: { name: string; role: string; photo_url: string | null };
-}
-
-function calcBattingRating(s: PlayerStat): number {
-  if (s.innings_batted === 0) return 0;
-  const avg = s.total_runs / Math.max(s.innings_batted - s.not_outs, 1);
-  const sr = s.balls_faced > 0 ? (s.total_runs / s.balls_faced) * 100 : 0;
-  return Math.round((avg * 3) + (sr * 0.8) + (s.total_runs * 0.5) + (s.fours * 2 + s.sixes * 5) + (s.fifties * 15 + s.hundreds * 50));
-}
-
-function calcBowlingRating(s: PlayerStat): number {
-  if (s.innings_bowled === 0 || s.overs_bowled === 0) return 0;
-  const bowlAvg = s.wickets_taken > 0 ? s.runs_conceded / s.wickets_taken : 999;
-  const econ = s.runs_conceded / Number(s.overs_bowled);
-  return Math.round((s.wickets_taken * 25) + Math.max(0, 100 - bowlAvg * 2) + Math.max(0, 80 - econ * 8) + (s.five_wickets * 50));
-}
-
-function calcAllRounderRating(s: PlayerStat): number {
-  const bat = calcBattingRating(s);
-  const bowl = calcBowlingRating(s);
-  if (bat === 0 && bowl === 0) return 0;
-  if (bat === 0 || bowl === 0) return Math.max(bat, bowl) * 0.4;
-  return Math.round(bat * 0.5 + bowl * 0.5 + Math.min(bat, bowl) * 0.2);
+  player?: { name: string; role: string; photo_url: string | null; organization_id: string };
+  org_name?: string;
 }
 
 const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
@@ -121,6 +101,9 @@ const RankingList = ({ items, tab, maxRating }: { items: RankedStat[]; tab: stri
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-bold text-foreground truncate">{item.player?.name || "Unknown"}</p>
                 <div className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">
+                  {item.org_name && (
+                    <span className="text-primary/70 mr-1.5">{item.org_name} •</span>
+                  )}
                   {tab === "batting" && (
                     <span>
                       {item.total_runs} runs • Avg {(item.total_runs / Math.max(item.innings_batted - item.not_outs, 1)).toFixed(1)} • SR {item.balls_faced > 0 ? ((item.total_runs / item.balls_faced) * 100).toFixed(1) : "—"}
@@ -166,25 +149,32 @@ const PublicLeaderboard = () => {
   const { data: stats = [], isLoading } = useQuery({
     queryKey: ["public-leaderboard"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("player_stats")
-        .select("*, player:players(name, role, photo_url)")
-        .gt("matches_played", 0);
-      if (error) throw error;
-      return (data || []) as unknown as PlayerStat[];
+      const [statsRes, orgsRes] = await Promise.all([
+        supabase
+          .from("player_stats")
+          .select("*, player:players(name, role, photo_url, organization_id)")
+          .gt("matches_played", 0),
+        supabase.from("organizations").select("id, name"),
+      ]);
+      if (statsRes.error) throw statsRes.error;
+      const orgMap = new Map((orgsRes.data || []).map(o => [o.id, o.name]));
+      return ((statsRes.data || []) as unknown as PlayerStat[]).map(s => ({
+        ...s,
+        org_name: s.player?.organization_id ? orgMap.get(s.player.organization_id) || "" : "",
+      }));
     },
   });
 
   const battingRanked = useMemo(
-    () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcBattingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcICCBattingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
     [stats]
   );
   const bowlingRanked = useMemo(
-    () => stats.filter(s => s.innings_bowled > 0 && s.overs_bowled > 0).map(s => ({ ...s, rating: calcBowlingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    () => stats.filter(s => s.innings_bowled > 0 && s.overs_bowled > 0).map(s => ({ ...s, rating: calcICCBowlingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
     [stats]
   );
   const allRounderRanked = useMemo(
-    () => stats.filter(s => s.innings_batted > 0 && s.innings_bowled > 0).map(s => ({ ...s, rating: calcAllRounderRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
+    () => stats.filter(s => s.innings_batted > 0 && s.innings_bowled > 0).map(s => ({ ...s, rating: calcICCAllRounderRating(s) })).filter(s => s.rating > 0).sort((a, b) => b.rating - a.rating).slice(0, 25),
     [stats]
   );
 
@@ -193,10 +183,10 @@ const PublicLeaderboard = () => {
       <div className="max-w-4xl mx-auto px-4 py-6 sm:py-10 space-y-6">
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="text-center space-y-1">
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-2">
-            <Trophy className="h-3.5 w-3.5" /> Rankings
+            <Trophy className="h-3.5 w-3.5" /> ICC-Style Rankings
           </div>
           <h1 className="text-2xl sm:text-3xl font-display font-black text-foreground tracking-tight">Player Rankings</h1>
-          <p className="text-xs sm:text-sm text-muted-foreground">Performance-based auto rankings across all matches</p>
+          <p className="text-xs sm:text-sm text-muted-foreground">ICC-inspired performance ratings across all organizations</p>
         </motion.div>
 
         {isLoading ? (

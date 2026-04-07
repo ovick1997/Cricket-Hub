@@ -6,6 +6,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { motion, AnimatePresence } from "framer-motion";
 import { Trophy, TrendingUp, Target, Star, Medal, Crown, Award } from "lucide-react";
+import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating } from "@/lib/ranking-utils";
 
 type PlayerStat = {
   id: string;
@@ -33,39 +34,6 @@ type PlayerStat = {
   player?: { name: string; role: string; photo_url: string | null };
 };
 
-// Batting rating: weighted score based on runs, avg, SR, boundaries, milestones
-function calcBattingRating(s: PlayerStat): number {
-  if (s.innings_batted === 0) return 0;
-  const avg = s.total_runs / Math.max(s.innings_batted - s.not_outs, 1);
-  const sr = s.balls_faced > 0 ? (s.total_runs / s.balls_faced) * 100 : 0;
-  const boundaryBonus = (s.fours * 2 + s.sixes * 5);
-  const milestoneBonus = (s.fifties * 15 + s.hundreds * 50);
-  return Math.round(
-    (avg * 3) + (sr * 0.8) + (s.total_runs * 0.5) + boundaryBonus + milestoneBonus
-  );
-}
-
-// Bowling rating: weighted score based on wickets, economy, avg, milestones
-function calcBowlingRating(s: PlayerStat): number {
-  if (s.innings_bowled === 0 || s.overs_bowled === 0) return 0;
-  const bowlAvg = s.wickets_taken > 0 ? s.runs_conceded / s.wickets_taken : 999;
-  const econ = s.runs_conceded / Number(s.overs_bowled);
-  const wicketPoints = s.wickets_taken * 25;
-  const avgBonus = bowlAvg < 999 ? Math.max(0, 100 - bowlAvg * 2) : 0;
-  const econBonus = Math.max(0, 80 - econ * 8);
-  const milestoneBonus = s.five_wickets * 50;
-  return Math.round(wicketPoints + avgBonus + econBonus + milestoneBonus);
-}
-
-// All-rounder: combined batting + bowling, weighted
-function calcAllRounderRating(s: PlayerStat): number {
-  const bat = calcBattingRating(s);
-  const bowl = calcBowlingRating(s);
-  if (bat === 0 && bowl === 0) return 0;
-  if (bat === 0 || bowl === 0) return Math.max(bat, bowl) * 0.4; // Penalize one-dimensional
-  return Math.round(bat * 0.5 + bowl * 0.5 + Math.min(bat, bowl) * 0.2); // Bonus for balance
-}
-
 const rankBadge = (i: number) => {
   if (i === 0) return <Crown className="h-5 w-5 text-yellow-400" />;
   if (i === 1) return <Medal className="h-5 w-5 text-gray-300" />;
@@ -92,26 +60,15 @@ export default function Rankings() {
   });
 
   const battingRanked = useMemo(
-    () => stats
-      .filter(s => s.innings_batted > 0)
-      .map(s => ({ ...s, rating: calcBattingRating(s) }))
-      .sort((a, b) => b.rating - a.rating),
+    () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcICCBattingRating(s) })).sort((a, b) => b.rating - a.rating),
     [stats]
   );
-
   const bowlingRanked = useMemo(
-    () => stats
-      .filter(s => s.innings_bowled > 0 && s.overs_bowled > 0)
-      .map(s => ({ ...s, rating: calcBowlingRating(s) }))
-      .sort((a, b) => b.rating - a.rating),
+    () => stats.filter(s => s.innings_bowled > 0 && s.overs_bowled > 0).map(s => ({ ...s, rating: calcICCBowlingRating(s) })).sort((a, b) => b.rating - a.rating),
     [stats]
   );
-
   const allRounderRanked = useMemo(
-    () => stats
-      .filter(s => s.innings_batted > 0 && s.innings_bowled > 0)
-      .map(s => ({ ...s, rating: calcAllRounderRating(s) }))
-      .sort((a, b) => b.rating - a.rating),
+    () => stats.filter(s => s.innings_batted > 0 && s.innings_bowled > 0).map(s => ({ ...s, rating: calcICCAllRounderRating(s) })).filter(s => s.rating > 0).sort((a, b) => b.rating - a.rating),
     [stats]
   );
 
@@ -126,18 +83,16 @@ export default function Rankings() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 flex items-center justify-center">
             <Trophy className="h-5 w-5 text-yellow-400" />
           </div>
           <div>
             <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Player Rankings</h1>
-            <p className="text-xs text-muted-foreground">Performance-based auto rankings</p>
+            <p className="text-xs text-muted-foreground">ICC-style performance ratings</p>
           </div>
         </div>
 
-        {/* Tabs */}
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="bg-muted/30 border border-border/40 p-1 w-full sm:w-auto">
             <TabsTrigger value="batting" className="text-xs sm:text-sm gap-1.5 data-[state=active]:bg-primary/15 data-[state=active]:text-primary">
@@ -183,12 +138,9 @@ export default function Rankings() {
                         }`}
                       >
                         <div className="flex items-center gap-3 p-3 sm:p-4">
-                          {/* Rank */}
                           <div className="w-8 flex items-center justify-center shrink-0">
                             {rankBadge(i)}
                           </div>
-
-                          {/* Avatar */}
                           <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-sm font-bold shrink-0 ${
                             i === 0 ? "bg-yellow-500/20 text-yellow-400" :
                             i === 1 ? "bg-gray-400/20 text-gray-300" :
@@ -201,8 +153,6 @@ export default function Rankings() {
                               item.player?.name?.charAt(0) || "?"
                             )}
                           </div>
-
-                          {/* Info */}
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-foreground truncate">
                               {item.player?.name || "Unknown"}
@@ -225,8 +175,6 @@ export default function Rankings() {
                               )}
                             </div>
                           </div>
-
-                          {/* Rating */}
                           <div className="text-right shrink-0">
                             <p className={`text-lg font-bold tabular-nums ${
                               i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-300" : i === 2 ? "text-amber-500" : "text-foreground"
@@ -236,8 +184,6 @@ export default function Rankings() {
                             <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Rating</p>
                           </div>
                         </div>
-
-                        {/* Rating bar */}
                         <div className="px-3 sm:px-4 pb-3">
                           <div className="h-1 rounded-full bg-muted/30 overflow-hidden">
                             <motion.div
