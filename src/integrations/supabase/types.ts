@@ -904,6 +904,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      reset_organization_data: { Args: { _org_id: string }; Returns: undefined }
       user_in_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean

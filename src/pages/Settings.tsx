@@ -27,6 +27,7 @@ import {
   FileJson,
   UserCog,
   UserMinus,
+  RotateCcw,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -426,6 +427,8 @@ const Settings = () => {
   const [assignRole, setAssignRole] = useState("viewer");
   const [deleteOrgConfirm, setDeleteOrgConfirm] = useState<{ id: string; name: string } | null>(null);
   const [deleteOrgInput, setDeleteOrgInput] = useState("");
+  const [resetOrgConfirm, setResetOrgConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [resetOrgInput, setResetOrgInput] = useState("");
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -670,6 +673,20 @@ const Settings = () => {
       window.location.href = "/dashboard";
     },
     onError: (err) => toast.error("Failed to delete: " + err.message),
+  });
+
+  const resetOrgData = useMutation({
+    mutationFn: async (orgId: string) => {
+      const { error } = await supabase.rpc("reset_organization_data", { _org_id: orgId });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Organization data reset successfully! Players & stats preserved.");
+      setResetOrgConfirm(null);
+      setResetOrgInput("");
+      queryClient.invalidateQueries({ queryKey: ["all-organizations"] });
+    },
+    onError: (err) => toast.error("Failed to reset: " + err.message),
   });
 
   // Current permissions for selected role
@@ -950,6 +967,12 @@ const Settings = () => {
                           onClick={() => { setAssignMemberOrgId(o.id); setAssignUserId(""); }}
                           className="h-8 px-2.5 rounded-lg bg-accent/10 text-accent text-xs font-semibold hover:bg-accent/20 transition-colors flex items-center gap-1">
                           <UserPlus className="h-3 w-3" /> Assign
+                        </motion.button>
+                        <motion.button whileTap={{ scale: 0.9 }}
+                          onClick={() => { setResetOrgConfirm({ id: o.id, name: o.name }); setResetOrgInput(""); }}
+                          className="h-8 px-2.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs font-semibold hover:bg-amber-500/20 transition-colors flex items-center gap-1"
+                          title="Reset all data (keeps players & stats)">
+                          <RotateCcw className="h-3 w-3" /> Reset
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
                           onClick={() => { setOrgName(o.name); setEditingOrgId(o.id); setEditingOrg(true); }}
@@ -1479,6 +1502,43 @@ const Settings = () => {
               className="rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90">
               {removeMemberFromOrg.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />}
               Remove from Org
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Reset Organization Data Confirmation */}
+      <AlertDialog open={!!resetOrgConfirm} onOpenChange={(open) => { if (!open) { setResetOrgConfirm(null); setResetOrgInput(""); } }}>
+        <AlertDialogContent className="bg-card border-amber-500/30">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-display text-amber-500">Reset Organization Data</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span>This will delete all <strong>matches, teams, tournaments, and notifications</strong> for <strong className="text-foreground">{resetOrgConfirm?.name}</strong>.</span>
+              <span className="block text-xs mt-1">✅ Players and player statistics will be <strong className="text-primary">preserved</strong>.</span>
+              <span className="block text-xs">✅ Members and roles will stay assigned.</span>
+              <span className="block mt-3 text-xs">Type <strong className="text-foreground font-mono">{resetOrgConfirm?.name}</strong> to confirm:</span>
+              <Input
+                value={resetOrgInput}
+                onChange={(e) => setResetOrgInput(e.target.value)}
+                placeholder="Type organization name..."
+                className="bg-muted/40 border-amber-500/30 mt-2"
+                autoFocus
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="rounded-xl" onClick={() => { setResetOrgConfirm(null); setResetOrgInput(""); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={resetOrgInput !== resetOrgConfirm?.name || resetOrgData.isPending}
+              onClick={(e) => {
+                e.preventDefault();
+                if (resetOrgConfirm && resetOrgInput === resetOrgConfirm.name) {
+                  resetOrgData.mutate(resetOrgConfirm.id);
+                }
+              }}
+              className="rounded-xl bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
+              {resetOrgData.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+              Reset Data
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
