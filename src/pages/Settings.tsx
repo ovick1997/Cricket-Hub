@@ -399,37 +399,6 @@ const Settings = () => {
     enabled: isAdmin,
   });
 
-  // All members in the organization
-  const { data: members = [], isLoading: loadingMembers } = useQuery({
-    queryKey: ["org-members", organizationId],
-    queryFn: async () => {
-      if (!organizationId) return [];
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("organization_id", organizationId)
-        .eq("is_approved", true);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!organizationId && isAdmin,
-  });
-
-  // User roles
-  const { data: memberRoles = [] } = useQuery({
-    queryKey: ["member-roles", organizationId],
-    queryFn: async () => {
-      if (!organizationId) return [];
-      const { data, error } = await supabase
-        .from("user_roles")
-        .select("*")
-        .eq("organization_id", organizationId);
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!organizationId && isAdmin,
-  });
-
   // All organizations (admin can see all)
   const { data: allOrgs = [] } = useQuery({
     queryKey: ["all-organizations"],
@@ -532,30 +501,12 @@ const Settings = () => {
     },
   });
 
-  // Change member role
-  const changeRole = useMutation({
-    mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
-      if (!organizationId) throw new Error("No organization");
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ role: newRole as any })
-        .eq("user_id", userId)
-        .eq("organization_id", organizationId);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["member-roles"] });
-      toast.success("Role updated!");
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
   // Delete member
   const [removeConfirm, setRemoveConfirm] = useState<{ id: string; userId: string; name: string } | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
   const removeMember = useMutation({
     mutationFn: async ({ profileId: _profileId, userId }: { profileId: string; userId: string }) => {
-      if (!organizationId) throw new Error("No organization");
+      if (!userId) throw new Error("User ID is required");
       setDeletingUser(true);
       const { data: { session } } = await supabase.auth.getSession();
       const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/admin-delete-user`, {
@@ -933,7 +884,7 @@ const Settings = () => {
                 </div>
                 <div className="grid grid-cols-3 gap-2 md:gap-3 mt-3 md:mt-4">
                   <div className="p-2 md:p-3 rounded-lg md:rounded-xl bg-muted/10 border border-border/40 text-center">
-                    <p className="text-lg md:text-2xl font-display font-bold text-foreground">{members.length}</p>
+                    <p className="text-lg md:text-2xl font-display font-bold text-foreground">{allProfiles.filter((p: any) => p.organization_id === organizationId).length}</p>
                     <p className="text-[8px] md:text-[10px] text-muted-foreground uppercase tracking-widest">Members</p>
                   </div>
                   <div className="p-2 md:p-3 rounded-lg md:rounded-xl bg-muted/10 border border-border/40 text-center">
@@ -941,7 +892,7 @@ const Settings = () => {
                     <p className="text-[8px] md:text-[10px] text-muted-foreground uppercase tracking-widest">Pending</p>
                   </div>
                   <div className="p-2 md:p-3 rounded-lg md:rounded-xl bg-muted/10 border border-border/40 text-center">
-                    <p className="text-lg md:text-2xl font-display font-bold text-primary">{memberRoles.filter((r: any) => r.role === "admin").length}</p>
+                    <p className="text-lg md:text-2xl font-display font-bold text-primary">{allUserRoles.filter((r: any) => r.role === "admin" && r.organization_id === organizationId).length}</p>
                     <p className="text-[8px] md:text-[10px] text-muted-foreground uppercase tracking-widest">Admins</p>
                   </div>
                 </div>
@@ -1465,6 +1416,7 @@ const Settings = () => {
               setNewUserEmail(""); setNewUserPassword(""); setNewUserName(""); setNewUserRole("viewer");
               queryClient.invalidateQueries({ queryKey: ["org-members"] });
               queryClient.invalidateQueries({ queryKey: ["member-roles"] });
+              queryClient.invalidateQueries({ queryKey: ["all-profiles"] });
             } catch (err: any) {
               toast.error(err.message);
             } finally {
