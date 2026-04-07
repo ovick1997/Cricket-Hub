@@ -1,37 +1,17 @@
-import { useMemo } from "react";
+import { useState, useMemo } from "react";
 import { PublicLayout } from "@/components/PublicLayout";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
-import { Trophy, Target, TrendingUp, Star, Loader2, Crown, Medal, Award } from "lucide-react";
+import { Trophy, Target, TrendingUp, Star, Loader2, Crown, Medal, Award, Filter } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating } from "@/lib/ranking-utils";
+import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating, PlayerStatForRanking } from "@/lib/ranking-utils";
 
-interface PlayerStat {
-  id: string;
+interface PlayerStat extends PlayerStatForRanking {
   player_id: string;
-  matches_played: number;
-  innings_batted: number;
-  total_runs: number;
-  balls_faced: number;
-  fours: number;
-  sixes: number;
-  highest_score: number;
-  not_outs: number;
-  innings_bowled: number;
-  overs_bowled: number;
-  runs_conceded: number;
-  wickets_taken: number;
-  best_bowling_wickets: number;
-  best_bowling_runs: number;
-  catches: number;
-  run_outs: number;
-  stumpings: number;
-  fifties: number;
-  hundreds: number;
-  five_wickets: number;
-  player?: { name: string; role: string; photo_url: string | null; organization_id: string };
+  player?: { name: string; role: string; photo_url: string | null; organization_id?: string };
   org_name?: string;
 }
 
@@ -146,7 +126,18 @@ const RankingList = ({ items, tab, maxRating }: { items: RankedStat[]; tab: stri
 };
 
 const PublicLeaderboard = () => {
-  const { data: stats = [], isLoading } = useQuery({
+  const [formatFilter, setFormatFilter] = useState("all");
+
+  const { data: formats = [] } = useQuery({
+    queryKey: ["public-match-formats"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("get_distinct_match_overs", {});
+      if (error) throw error;
+      return (data || []).map((d: { overs: number }) => d.overs);
+    },
+  });
+
+  const { data: allStats = [], isLoading: loadingAll } = useQuery({
     queryKey: ["public-leaderboard"],
     queryFn: async () => {
       const [statsRes, orgsRes] = await Promise.all([
@@ -163,7 +154,30 @@ const PublicLeaderboard = () => {
         org_name: s.player?.organization_id ? orgMap.get(s.player.organization_id) || "" : "",
       }));
     },
+    enabled: formatFilter === "all",
   });
+
+  const { data: formatStats = [], isLoading: loadingFormat } = useQuery({
+    queryKey: ["public-leaderboard-format", formatFilter],
+    queryFn: async () => {
+      const [statsRes, orgsRes] = await Promise.all([
+        supabase.rpc("get_player_stats_by_format", { _overs: parseInt(formatFilter) }),
+        supabase.from("organizations").select("id, name"),
+      ]);
+      if (statsRes.error) throw statsRes.error;
+      const orgMap = new Map((orgsRes.data || []).map(o => [o.id, o.name]));
+      return ((statsRes.data || []) as any[]).map(d => ({
+        ...d,
+        player_id: d.player_id,
+        player: { name: d.player_name, role: d.player_role, photo_url: d.player_photo_url, organization_id: d.player_organization_id },
+        org_name: d.player_organization_id ? orgMap.get(d.player_organization_id) || "" : "",
+      })) as PlayerStat[];
+    },
+    enabled: formatFilter !== "all",
+  });
+
+  const stats = formatFilter === "all" ? allStats : formatStats;
+  const isLoading = formatFilter === "all" ? loadingAll : loadingFormat;
 
   const battingRanked = useMemo(
     () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcICCBattingRating(s) })).sort((a, b) => b.rating - a.rating).slice(0, 25),
@@ -188,6 +202,21 @@ const PublicLeaderboard = () => {
           <h1 className="text-2xl sm:text-3xl font-display font-black text-foreground tracking-tight">Player Rankings</h1>
           <p className="text-xs sm:text-sm text-muted-foreground">ICC-inspired performance ratings across all organizations</p>
         </motion.div>
+
+        <div className="flex justify-center">
+          <Select value={formatFilter} onValueChange={setFormatFilter}>
+            <SelectTrigger className="w-[180px] bg-card border-border/40">
+              <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Format" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Formats</SelectItem>
+              {formats.map((f: number) => (
+                <SelectItem key={f} value={String(f)}>{f} Over</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
         {isLoading ? (
           <div className="flex justify-center py-20">

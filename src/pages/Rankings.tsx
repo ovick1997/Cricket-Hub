@@ -4,33 +4,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trophy, TrendingUp, Target, Star, Medal, Crown, Award } from "lucide-react";
-import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating } from "@/lib/ranking-utils";
+import { Trophy, TrendingUp, Target, Star, Medal, Crown, Award, Filter } from "lucide-react";
+import { calcICCBattingRating, calcICCBowlingRating, calcICCAllRounderRating, PlayerStatForRanking } from "@/lib/ranking-utils";
 
-type PlayerStat = {
-  id: string;
+type PlayerStat = PlayerStatForRanking & {
+  id?: string;
   player_id: string;
-  matches_played: number;
-  innings_batted: number;
-  total_runs: number;
-  balls_faced: number;
-  fours: number;
-  sixes: number;
-  highest_score: number;
-  not_outs: number;
-  innings_bowled: number;
-  overs_bowled: number;
-  runs_conceded: number;
-  wickets_taken: number;
-  best_bowling_wickets: number;
-  best_bowling_runs: number;
-  catches: number;
-  run_outs: number;
-  stumpings: number;
-  fifties: number;
-  hundreds: number;
-  five_wickets: number;
   player?: { name: string; role: string; photo_url: string | null };
 };
 
@@ -44,8 +25,20 @@ const rankBadge = (i: number) => {
 export default function Rankings() {
   const { organizationId } = useAuth();
   const [tab, setTab] = useState("batting");
+  const [formatFilter, setFormatFilter] = useState("all");
 
-  const { data: stats = [], isLoading } = useQuery({
+  const { data: formats = [] } = useQuery({
+    queryKey: ["match-formats", organizationId],
+    queryFn: async () => {
+      if (!organizationId) return [];
+      const { data, error } = await supabase.rpc("get_distinct_match_overs", { _org_id: organizationId });
+      if (error) throw error;
+      return (data || []).map((d: { overs: number }) => d.overs);
+    },
+    enabled: !!organizationId,
+  });
+
+  const { data: allStats = [], isLoading: loadingAll } = useQuery({
     queryKey: ["player-stats-rankings", organizationId],
     queryFn: async () => {
       if (!organizationId) return [];
@@ -56,8 +49,29 @@ export default function Rankings() {
       if (error) throw error;
       return (data || []) as PlayerStat[];
     },
-    enabled: !!organizationId,
+    enabled: !!organizationId && formatFilter === "all",
   });
+
+  const { data: formatStats = [], isLoading: loadingFormat } = useQuery({
+    queryKey: ["player-stats-by-format", organizationId, formatFilter],
+    queryFn: async () => {
+      if (!organizationId || formatFilter === "all") return [];
+      const { data, error } = await supabase.rpc("get_player_stats_by_format", {
+        _overs: parseInt(formatFilter),
+        _org_id: organizationId,
+      });
+      if (error) throw error;
+      return (data || []).map((d: any) => ({
+        ...d,
+        player_id: d.player_id,
+        player: { name: d.player_name, role: d.player_role, photo_url: d.player_photo_url },
+      })) as PlayerStat[];
+    },
+    enabled: !!organizationId && formatFilter !== "all",
+  });
+
+  const stats = formatFilter === "all" ? allStats : formatStats;
+  const isLoading = formatFilter === "all" ? loadingAll : loadingFormat;
 
   const battingRanked = useMemo(
     () => stats.filter(s => s.innings_batted > 0).map(s => ({ ...s, rating: calcICCBattingRating(s) })).sort((a, b) => b.rating - a.rating),
@@ -83,14 +97,28 @@ export default function Rankings() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 flex items-center justify-center">
-            <Trophy className="h-5 w-5 text-yellow-400" />
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="h-11 w-11 rounded-2xl bg-gradient-to-br from-yellow-500/20 to-amber-500/20 flex items-center justify-center">
+              <Trophy className="h-5 w-5 text-yellow-400" />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Player Rankings</h1>
+              <p className="text-xs text-muted-foreground">ICC-style performance ratings</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-display font-bold text-foreground">Player Rankings</h1>
-            <p className="text-xs text-muted-foreground">ICC-style performance ratings</p>
-          </div>
+          <Select value={formatFilter} onValueChange={setFormatFilter}>
+            <SelectTrigger className="w-[160px] bg-card border-border/40">
+              <Filter className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Format" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Formats</SelectItem>
+              {formats.map((f: number) => (
+                <SelectItem key={f} value={String(f)}>{f} Over</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <Tabs value={tab} onValueChange={setTab}>

@@ -895,6 +895,37 @@ export type Database = {
         Args: { _org_id: string }
         Returns: undefined
       }
+      get_distinct_match_overs: {
+        Args: { _org_id?: string }
+        Returns: {
+          overs: number
+        }[]
+      }
+      get_player_stats_by_format: {
+        Args: { _org_id?: string; _overs: number }
+        Returns: {
+          balls_faced: number
+          fifties: number
+          five_wickets: number
+          fours: number
+          highest_score: number
+          hundreds: number
+          innings_batted: number
+          innings_bowled: number
+          matches_played: number
+          not_outs: number
+          overs_bowled: number
+          player_id: string
+          player_name: string
+          player_organization_id: string
+          player_photo_url: string
+          player_role: Database["public"]["Enums"]["player_role"]
+          runs_conceded: number
+          sixes: number
+          total_runs: number
+          wickets_taken: number
+        }[]
+      }
       get_user_org_id: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
