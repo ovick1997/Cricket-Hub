@@ -936,6 +936,18 @@ export type Database = {
         Returns: boolean
       }
       reset_organization_data: { Args: { _org_id: string }; Returns: undefined }
+      selective_reset_organization_data: {
+        Args: {
+          _delete_matches?: boolean
+          _delete_notifications?: boolean
+          _delete_player_stats?: boolean
+          _delete_players?: boolean
+          _delete_teams?: boolean
+          _delete_tournaments?: boolean
+          _org_id: string
+        }
+        Returns: undefined
+      }
       user_in_org: {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean

@@ -2,6 +2,7 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { useAuth } from "@/hooks/useAuth";
 import { usePermissions, ALL_PERMISSIONS, DEFAULT_PERMISSIONS } from "@/hooks/usePermissions";
 import { supabase } from "@/integrations/supabase/client";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
@@ -429,6 +430,14 @@ const Settings = () => {
   const [deleteOrgInput, setDeleteOrgInput] = useState("");
   const [resetOrgConfirm, setResetOrgConfirm] = useState<{ id: string; name: string } | null>(null);
   const [resetOrgInput, setResetOrgInput] = useState("");
+  const [selectiveResetOptions, setSelectiveResetOptions] = useState({
+    matches: false,
+    tournaments: false,
+    teams: false,
+    playerStats: false,
+    players: false,
+    notifications: false,
+  });
   const [createUserOpen, setCreateUserOpen] = useState(false);
   const [newUserEmail, setNewUserEmail] = useState("");
   const [newUserPassword, setNewUserPassword] = useState("");
@@ -675,15 +684,24 @@ const Settings = () => {
     onError: (err) => toast.error("Failed to delete: " + err.message),
   });
 
-  const resetOrgData = useMutation({
-    mutationFn: async (orgId: string) => {
-      const { error } = await supabase.rpc("reset_organization_data", { _org_id: orgId });
+  const selectiveResetOrg = useMutation({
+    mutationFn: async ({ orgId, options }: { orgId: string; options: typeof selectiveResetOptions }) => {
+      const { error } = await supabase.rpc("selective_reset_organization_data", {
+        _org_id: orgId,
+        _delete_matches: options.matches,
+        _delete_tournaments: options.tournaments,
+        _delete_teams: options.teams,
+        _delete_player_stats: options.playerStats,
+        _delete_players: options.players,
+        _delete_notifications: options.notifications,
+      } as any);
       if (error) throw error;
     },
     onSuccess: () => {
-      toast.success("Organization data reset successfully! Players & stats preserved.");
+      toast.success("Selected data reset successfully!");
       setResetOrgConfirm(null);
       setResetOrgInput("");
+      setSelectiveResetOptions({ matches: false, tournaments: false, teams: false, playerStats: false, players: false, notifications: false });
       queryClient.invalidateQueries({ queryKey: ["all-organizations"] });
     },
     onError: (err) => toast.error("Failed to reset: " + err.message),
@@ -969,9 +987,9 @@ const Settings = () => {
                           <UserPlus className="h-3 w-3" /> Assign
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
-                          onClick={() => { setResetOrgConfirm({ id: o.id, name: o.name }); setResetOrgInput(""); }}
+                          onClick={() => { setResetOrgConfirm({ id: o.id, name: o.name }); setResetOrgInput(""); setSelectiveResetOptions({ matches: false, tournaments: false, teams: false, playerStats: false, players: false, notifications: false }); }}
                           className="h-8 px-2.5 rounded-lg bg-amber-500/10 text-amber-500 text-xs font-semibold hover:bg-amber-500/20 transition-colors flex items-center gap-1"
-                          title="Reset all data (keeps players & stats)">
+                          title="Selectively reset organization data">
                           <RotateCcw className="h-3 w-3" /> Reset
                         </motion.button>
                         <motion.button whileTap={{ scale: 0.9 }}
@@ -1507,42 +1525,97 @@ const Settings = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Reset Organization Data Confirmation */}
-      <AlertDialog open={!!resetOrgConfirm} onOpenChange={(open) => { if (!open) { setResetOrgConfirm(null); setResetOrgInput(""); } }}>
-        <AlertDialogContent className="bg-card border-amber-500/30">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-display text-amber-500">Reset Organization Data</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-3">
-              <span>This will delete all <strong>matches, teams, tournaments, and notifications</strong> for <strong className="text-foreground">{resetOrgConfirm?.name}</strong>.</span>
-              <span className="block text-xs mt-1">✅ Players and player statistics will be <strong className="text-primary">preserved</strong>.</span>
-              <span className="block text-xs">✅ Members and roles will stay assigned.</span>
-              <span className="block mt-3 text-xs">Type <strong className="text-foreground font-mono">{resetOrgConfirm?.name}</strong> to confirm:</span>
+      {/* Selective Reset Organization Data Dialog */}
+      <Dialog open={!!resetOrgConfirm} onOpenChange={(open) => { if (!open) { setResetOrgConfirm(null); setResetOrgInput(""); } }}>
+        <DialogContent className="bg-card border-amber-500/30">
+          <DialogHeader>
+            <DialogTitle className="font-display text-amber-500 flex items-center gap-2">
+              <RotateCcw className="h-5 w-5" /> Reset Organization Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Select what to delete for <strong className="text-foreground">{resetOrgConfirm?.name}</strong>:
+            </p>
+            <div className="space-y-3">
+              {[
+                { key: "matches" as const, label: "Matches", desc: "Balls, innings, match summaries, matches", icon: "⚔️" },
+                { key: "tournaments" as const, label: "Tournaments", desc: "Tournament teams & tournaments", icon: "🏆" },
+                { key: "teams" as const, label: "Teams", desc: "Team rosters & teams", icon: "👥" },
+                { key: "playerStats" as const, label: "Player Statistics", desc: "Reset all stats to zero (keeps players)", icon: "📊" },
+                { key: "players" as const, label: "Players", desc: "Players and their stats", icon: "🏏" },
+                { key: "notifications" as const, label: "Notifications", desc: "All notifications", icon: "🔔" },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                    selectiveResetOptions[item.key]
+                      ? "border-amber-500/40 bg-amber-500/5"
+                      : "border-border hover:border-border/80 hover:bg-muted/20"
+                  }`}
+                >
+                  <Checkbox
+                    checked={selectiveResetOptions[item.key]}
+                    onCheckedChange={(checked) =>
+                      setSelectiveResetOptions((prev) => ({ ...prev, [item.key]: !!checked }))
+                    }
+                    className="mt-0.5 border-amber-500/50 data-[state=checked]:bg-amber-500 data-[state=checked]:border-amber-500"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-foreground">{item.icon} {item.label}</p>
+                    <p className="text-[11px] text-muted-foreground">{item.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {selectiveResetOptions.players && (
+              <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
+                ⚠️ Deleting players will also delete all their statistics permanently.
+              </div>
+            )}
+
+            <div className="space-y-2 pt-1">
+              <p className="text-xs text-muted-foreground">
+                Type <strong className="text-foreground font-mono">{resetOrgConfirm?.name}</strong> to confirm:
+              </p>
               <Input
                 value={resetOrgInput}
                 onChange={(e) => setResetOrgInput(e.target.value)}
                 placeholder="Type organization name..."
-                className="bg-muted/40 border-amber-500/30 mt-2"
-                autoFocus
+                className="bg-muted/40 border-amber-500/30"
               />
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="rounded-xl" onClick={() => { setResetOrgConfirm(null); setResetOrgInput(""); }}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              disabled={resetOrgInput !== resetOrgConfirm?.name || resetOrgData.isPending}
-              onClick={(e) => {
-                e.preventDefault();
-                if (resetOrgConfirm && resetOrgInput === resetOrgConfirm.name) {
-                  resetOrgData.mutate(resetOrgConfirm.id);
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                onClick={() => { setResetOrgConfirm(null); setResetOrgInput(""); }}
+                className="px-4 py-2 rounded-xl text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Cancel
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.97 }}
+                disabled={
+                  resetOrgInput !== resetOrgConfirm?.name ||
+                  !Object.values(selectiveResetOptions).some(Boolean) ||
+                  selectiveResetOrg.isPending
                 }
-              }}
-              className="rounded-xl bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
-              {resetOrgData.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RotateCcw className="h-4 w-4 mr-1" />}
-              Reset Data
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+                onClick={() => {
+                  if (resetOrgConfirm && resetOrgInput === resetOrgConfirm.name) {
+                    selectiveResetOrg.mutate({ orgId: resetOrgConfirm.id, options: selectiveResetOptions });
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-1.5"
+              >
+                {selectiveResetOrg.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+                Reset Selected
+              </motion.button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 };
