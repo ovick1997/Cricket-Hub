@@ -935,6 +935,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_system_admin: { Args: { _user_id: string }; Returns: boolean }
       reset_organization_data: { Args: { _org_id: string }; Returns: undefined }
       selective_reset_organization_data: {
         Args: {

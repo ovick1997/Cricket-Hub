@@ -7,7 +7,14 @@ import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useCallback, useState } from "react";
 import { usePullToRefresh } from "@/hooks/use-pull-to-refresh";
 import { useSwipeNav } from "@/hooks/use-swipe-nav";
-import { Search, RefreshCw, Settings, LogOut, UserCircle, BarChart3, ChevronDown, Trophy, History } from "lucide-react";
+import { Search, RefreshCw, Settings, LogOut, UserCircle, BarChart3, ChevronDown, Trophy, History, Building2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   DropdownMenu,
@@ -20,7 +27,7 @@ import {
 import { usePermissions } from "@/hooks/usePermissions";
 
 export function DashboardLayout({ children, onRefresh }: { children: React.ReactNode; onRefresh?: () => Promise<void> | void }) {
-  const { user, organizationId, loading, signOut, userRole } = useAuth();
+  const { user, organizationId, loading, signOut, userRole, isAdmin, allOrganizations, activeOrganizationId, setActiveOrganizationId } = useAuth();
   const navigate = useNavigate();
   const { hasPermission } = usePermissions();
 
@@ -86,7 +93,23 @@ export function DashboardLayout({ children, onRefresh }: { children: React.React
                 />
               </div>
             </div>
+            {/* Admin org switcher */}
             <div className="flex items-center gap-2">
+              {isAdmin && allOrganizations.length > 1 && (
+                <Select value={activeOrganizationId ?? ""} onValueChange={setActiveOrganizationId}>
+                  <SelectTrigger className="w-auto min-w-[140px] max-w-[200px] h-8 text-xs bg-muted/40 border-border/60 rounded-xl gap-1.5">
+                    <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <SelectValue placeholder="Select org" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allOrganizations.map((org) => (
+                      <SelectItem key={org.id} value={org.id} className="text-xs">
+                        {org.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
               <NotificationBell />
               <div className="h-5 w-px bg-border/60 hidden sm:block" />
               <DropdownMenu>
